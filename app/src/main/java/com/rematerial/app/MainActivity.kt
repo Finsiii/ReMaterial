@@ -9,10 +9,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -34,6 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.rematerial.app.core.designsystem.DockDestination
@@ -60,10 +66,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class MaterialExample(
+    val id: String,
+    val label: String,
+    val description: String,
+    val image: Int,
+)
+
+private val MaterialExamples = listOf(
+    MaterialExample("metal", "Logam", "Permukaan logam untuk dianalisis", R.drawable.material_metal),
+    MaterialExample("wood", "Kayu", "Serat kayu untuk dianalisis", R.drawable.material_wood),
+    MaterialExample("textile", "Tekstil", "Kain dan serat untuk dianalisis", R.drawable.material_textile),
+)
+
 @Composable
 private fun ReMaterialContent() {
     var selectedName by rememberSaveable { mutableStateOf(DockDestination.Beranda.name) }
     val selected = DockDestination.valueOf(selectedName)
+    val navigationBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val dockFootprint = 58.dp + 24.dp
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -71,7 +92,7 @@ private fun ReMaterialContent() {
                 .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp, vertical = 16.dp)
-                .padding(bottom = 104.dp),
+                .padding(bottom = dockFootprint + navigationBottomInset),
         ) {
             RematerialTopBar(
                 title = "ReMaterial",
@@ -95,23 +116,19 @@ private fun ReMaterialContent() {
             )
             Spacer(Modifier.height(24.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(listOf("metal", "wood", "textile")) { material ->
-                    val image = when (material) {
-                        "metal" -> R.drawable.material_metal
-                        "wood" -> R.drawable.material_wood
-                        else -> R.drawable.material_textile
-                    }
+                items(MaterialExamples) { material ->
                     Surface(
                         modifier = Modifier
                             .size(width = 124.dp, height = 156.dp)
-                            .clickable(onClick = {}),
+                            .clickable(role = Role.Button, onClick = {})
+                            .semantics { contentDescription = "Pilih material ${material.label.lowercase()}" },
                         color = RematerialColors.Surface,
                         shape = RoundedCornerShape(14.dp),
                     ) {
                         Column {
                             Image(
-                                painter = painterResource(image),
-                                contentDescription = material,
+                                painter = painterResource(material.image),
+                                contentDescription = null,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(112.dp)
@@ -119,7 +136,7 @@ private fun ReMaterialContent() {
                                 contentScale = ContentScale.Crop,
                             )
                             Text(
-                                material.replaceFirstChar { it.uppercase() },
+                                material.label,
                                 style = MaterialTheme.typography.labelLarge,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             )

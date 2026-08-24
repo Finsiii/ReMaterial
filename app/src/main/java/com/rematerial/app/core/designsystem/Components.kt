@@ -279,7 +279,7 @@ fun RematerialDock(
                         if (destination.isPrimary) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(44.dp)
                                     .clip(androidx.compose.foundation.shape.CircleShape)
                                     .background(RematerialColors.DeepForest),
                                 contentAlignment = Alignment.Center,
@@ -310,7 +310,7 @@ fun RematerialDock(
                                 color = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
                             )
                         }
-                        Spacer(Modifier.height(if (destination.isPrimary) 2.dp else 4.dp))
+                        Spacer(Modifier.height(if (destination.isPrimary) 0.dp else 4.dp))
                         Box(
                             modifier = Modifier
                                 .size(width = if (active) 18.dp else 0.dp, height = 2.dp)
