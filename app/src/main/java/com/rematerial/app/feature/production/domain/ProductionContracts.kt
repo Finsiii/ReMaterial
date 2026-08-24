@@ -8,10 +8,18 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ProductDraft(
     val optionId: ProductOptionId? = null,
-    val title: String = "Lampu meja dari kabel tembaga",
-    val materialSummary: String = "Kabel tembaga · 2,45 kg · kondisi layak olah",
-    val minimumQuantity: String = "1 unit",
+    val title: String = "",
+    val materialSummary: String = "",
+    val minimumQuantity: String = "",
+    val analysisId: String? = null,
+    val safetyAllowed: Boolean = true,
 )
+
+fun ProductDraft.isReadyForProduction(): Boolean =
+    optionId != null &&
+        title.isNotBlank() &&
+        !analysisId.isNullOrBlank() &&
+        safetyAllowed
 
 @Serializable
 data class ArtisanProfile(
@@ -25,6 +33,15 @@ data class ArtisanProfile(
     val availability: String,
     val about: String,
     val matchReason: String,
+    val whatsapp: String = "081234567891",
+    val latitude: Double = -6.9147,
+    val longitude: Double = 107.6098,
+    val portfolioImageKeys: List<String> = emptyList(),
+    val rating: String = "4,9",
+    val completedJobs: String = "86 karya selesai",
+    val responseTime: String = "Balas dalam 1 jam",
+    val workingHours: String = "Senin–Sabtu · 09.00–17.00",
+    val verifiedState: String = "Identitas dan portofolio telah diverifikasi",
 )
 
 @Serializable
@@ -36,6 +53,9 @@ data class ProductionRequest(
     val notes: String,
     val address: String,
     val targetDate: String,
+    val phone: String = "",
+    val whatsapp: String = "",
+    val preferredContact: String = "WhatsApp",
     val status: ProductionStatus = ProductionStatus.SUBMITTED,
 )
 
@@ -55,6 +75,9 @@ data class ProductionRequestInput(
     val notes: String,
     val address: String,
     val targetDate: String,
+    val phone: String = "",
+    val whatsapp: String = "",
+    val preferredContact: String = "WhatsApp",
 )
 
 interface ProductionRepository {

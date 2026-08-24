@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 class MockArtisanRepository : ArtisanRepository {
     private val jobs = MutableStateFlow(
         listOf(
-            ArtisanJob("JOB-109", "Dika Prasetya", "Lampu meja kabel tembaga", "Kabel tembaga · 2,45 kg", "1 unit", "20 September 2026", "Jl. Merdeka 24, Bandung", "Buat kabel terlihat sebagai aksen, bukan ditutup seluruhnya.", ArtisanJobStatus.PROCESSING),
-            ArtisanJob("JOB-108", "Nadia S.", "Rak dinding modular", "Kayu palet · 4 papan", "1 set", "24 September 2026", "Jl. Ciumbuleuit 18, Bandung", "Warna kayu natural, sudut tidak terlalu tajam.", ArtisanJobStatus.NEW),
-            ArtisanJob("JOB-104", "Reno A.", "Organizer meja", "Aluminium bekas · 1,2 kg", "2 unit", "28 September 2026", "Jl. Buah Batu 10, Bandung", "Sisakan tekstur goresan kecil sebagai karakter.", ArtisanJobStatus.ACCEPTED),
+            ArtisanJob("JOB-109", "Dika Prasetya", "Lampu meja kabel tembaga", "Kabel tembaga · 2,45 kg", "1 unit", "20 September 2026", "Jl. Merdeka 24, Bandung", "Buat kabel terlihat sebagai aksen, bukan ditutup seluruhnya.", ArtisanJobStatus.PROCESSING, "081234567890", "081234567890", "WhatsApp"),
+            ArtisanJob("JOB-108", "Nadia S.", "Rak dinding modular", "Kayu palet · 4 papan", "1 set", "24 September 2026", "Jl. Ciumbuleuit 18, Bandung", "Warna kayu natural, sudut tidak terlalu tajam.", ArtisanJobStatus.NEW, "081234567893", "081234567893", "WhatsApp"),
+            ArtisanJob("JOB-104", "Reno A.", "Organizer meja", "Aluminium bekas · 1,2 kg", "2 unit", "28 September 2026", "Jl. Buah Batu 10, Bandung", "Sisakan tekstur goresan kecil sebagai karakter.", ArtisanJobStatus.ACCEPTED, "081234567894", "081234567894", "Telepon"),
         ),
     )
     private var profileDraft = ArtisanProfileDraft()

@@ -28,6 +28,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +55,7 @@ import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
 import com.rematerial.app.core.designsystem.RematerialDock
+import com.rematerial.app.core.designsystem.RematerialDockMetrics
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
@@ -62,6 +69,7 @@ import com.rematerial.app.feature.marketplace.domain.OrderStatus
 
 private enum class MarketPage { HOME, DETAIL, CART, CHECKOUT, SUCCESS, ORDERS, ORDER_DETAIL }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MarketplaceRoute(
     onDestinationSelected: (DockDestination) -> Unit,
@@ -73,14 +81,27 @@ fun MarketplaceRoute(
     val page = MarketPage.valueOf(pageName)
     val go = { target: MarketPage -> pageName = target.name }
     Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
-        when (page) {
-            MarketPage.HOME -> MarketHomeScreen(state, viewModel::search, viewModel::category, viewModel::open, { go(MarketPage.CART) })
-            MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME) }, { viewModel.add(it); go(MarketPage.CART) }) } ?: MarketHomeScreen(state, viewModel::search, viewModel::category, viewModel::open, { go(MarketPage.CART) })
-            MarketPage.CART -> CartScreen(state.cart, state.sellerSwitchPrompt, viewModel::increment, viewModel::decrement, viewModel::remove, viewModel::dismissPrompt, { state.selectedProduct?.let(viewModel::confirmSellerSwitch) }, { go(MarketPage.CHECKOUT) }, { go(MarketPage.HOME) })
-            MarketPage.CHECKOUT -> CheckoutScreen(state.cart, { viewModel.placeOrder(it); go(MarketPage.SUCCESS) }, { go(MarketPage.CART) })
-            MarketPage.SUCCESS -> OrderSuccessScreen(state.lastOrder, { viewModel.clearLastOrder(); go(MarketPage.HOME) }, { go(MarketPage.ORDERS) })
-            MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
-            MarketPage.ORDER_DETAIL -> state.orders.firstOrNull { it.id == selectedOrderId }?.let { OrderDetailScreen(it, { go(MarketPage.ORDERS) }) } ?: OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                val forward = targetState.ordinal >= initialState.ordinal
+                if (forward) {
+                    slideInHorizontally(tween(280)) { it } togetherWith slideOutHorizontally(tween(280)) { -it }
+                } else {
+                    slideInHorizontally(tween(280)) { -it } togetherWith slideOutHorizontally(tween(280)) { it }
+                }
+            },
+            label = "market-page-transition",
+        ) { currentPage ->
+            when (currentPage) {
+                MarketPage.HOME -> MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL) }, { go(MarketPage.CART) })
+                MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME) }, { viewModel.add(it); go(MarketPage.CART) }) } ?: MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL) }, { go(MarketPage.CART) })
+                MarketPage.CART -> CartScreen(state.cart, state.sellerSwitchPrompt, viewModel::increment, viewModel::decrement, viewModel::remove, viewModel::dismissPrompt, { state.selectedProduct?.let(viewModel::confirmSellerSwitch) }, { go(MarketPage.CHECKOUT) }, { go(MarketPage.HOME) })
+                MarketPage.CHECKOUT -> CheckoutScreen(state.cart, { viewModel.placeOrder(it); go(MarketPage.SUCCESS) }, { go(MarketPage.CART) })
+                MarketPage.SUCCESS -> OrderSuccessScreen(state.lastOrder, { viewModel.clearLastOrder(); go(MarketPage.HOME) }, { go(MarketPage.ORDERS) })
+                MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
+                MarketPage.ORDER_DETAIL -> state.orders.firstOrNull { it.id == selectedOrderId }?.let { OrderDetailScreen(it, { go(MarketPage.ORDERS) }) } ?: OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
+            }
         }
         if (page == MarketPage.HOME) {
             RematerialDock(DockDestination.Pasar, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
@@ -100,30 +121,34 @@ fun MarketplaceOrdersRoute(onBack: () -> Unit, viewModel: MarketplaceViewModel =
 @Composable
 private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit, onCategory: (String?) -> Unit, onProduct: (MarketplaceProduct) -> Unit, onCart: () -> Unit) {
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 82.dp + bottom)) {
-        RematerialTopBar("Pasar", actionIcon = RematerialIcons.ShoppingBag, actionDescription = "Keranjang", onAction = onCart)
-        Spacer(Modifier.height(18.dp))
-        Text("Benda dengan\ncerita baru.", style = MaterialTheme.typography.displayLarge, color = RematerialColors.Ink)
-        Spacer(Modifier.height(8.dp))
-        Text("Temukan karya yang memberi umur kedua pada material.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
-        Spacer(Modifier.height(20.dp))
-        RematerialField(state.query, onSearch, "Cari di pasar", placeholder = "Cari produk atau material", modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(16.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            CategoryLink("Semua", state.category == null) { onCategory(null) }
-            listOf("Logam", "Kayu", "Tekstil").forEach { category -> CategoryLink(category, state.category == category) { onCategory(category) } }
-        }
-        Spacer(Modifier.height(24.dp))
-        if (state.products.isEmpty()) {
-            Text("Belum ada karya yang cocok.", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
-            Spacer(Modifier.height(6.dp)); Text("Coba kata kunci atau kategori lain.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-        } else {
-            Text(if (state.query.isBlank() && state.category == null) "Pilihan minggu ini" else "Hasil pencarian", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(bottom = 30.dp)) {
-                items(state.products, key = { it.id }) { ProductCard(it, onProduct) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+        contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom),
+    ) {
+        item {
+            RematerialTopBar("Pasar", actionIcon = RematerialIcons.ShoppingBag, actionDescription = "Keranjang", onAction = onCart)
+            Spacer(Modifier.height(18.dp))
+            Text("Benda dengan\ncerita baru.", style = MaterialTheme.typography.displayLarge, color = RematerialColors.Ink)
+            Spacer(Modifier.height(8.dp))
+            Text("Temukan karya yang memberi umur kedua pada material.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+            Spacer(Modifier.height(20.dp))
+            RematerialField(state.query, onSearch, "Cari di pasar", placeholder = "Cari produk atau material", modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                CategoryLink("Semua", state.category == null) { onCategory(null) }
+                listOf("Logam", "Kayu", "Tekstil").forEach { category -> CategoryLink(category, state.category == category) { onCategory(category) } }
+            }
+            Spacer(Modifier.height(24.dp))
+            if (state.products.isEmpty()) {
+                Text("Belum ada karya yang cocok.", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                Spacer(Modifier.height(6.dp)); Text("Coba kata kunci atau kategori lain.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            } else {
+                Text(if (state.query.isBlank() && state.category == null) "Pilihan minggu ini" else "Hasil pencarian", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                Spacer(Modifier.height(12.dp))
             }
         }
+        items(state.products, key = { it.id }) { ProductCard(it, onProduct) }
     }
 }
 
@@ -212,20 +237,11 @@ fun UserAccountRoute(
     onLogout: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 94.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
-            RematerialTopBar("Akun", onBack = onBack)
-            Spacer(Modifier.height(22.dp))
-            Text("Dika", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
-            Text("user@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-            Spacer(Modifier.height(28.dp))
-            Text("Ruangmu", style = MaterialTheme.typography.titleLarge)
-            AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis)
-            AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction)
-            AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders)
-            Spacer(Modifier.height(24.dp))
-            Text("Akun siap digunakan.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-            Spacer(Modifier.height(24.dp))
-            RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut)
+        LazyColumn(
+            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
+            contentPadding = PaddingValues(bottom = RematerialDockMetrics.reservedBottom + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+        ) {
+            item { RematerialTopBar("Akun", onBack = onBack); Spacer(Modifier.height(22.dp)); Text("Dika", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text("user@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); Text("Ruangmu", style = MaterialTheme.typography.titleLarge); AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis); AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction); AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders); Spacer(Modifier.height(24.dp)); Text("Akun siap digunakan.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(24.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut) }
         }
         RematerialDock(DockDestination.Akun, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
     }

@@ -15,6 +15,9 @@ data class ArtisanJob(
     val address: String,
     val notes: String,
     val status: ArtisanJobStatus,
+    val customerPhone: String = "",
+    val customerWhatsapp: String = "",
+    val preferredContact: String = "WhatsApp",
 )
 
 @Serializable

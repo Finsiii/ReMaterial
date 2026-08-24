@@ -96,17 +96,61 @@ object AnalysisFixtures {
             "usable_quantity_ratio", "massa tercatat × 0.90", .90, UnitCode.KG,
             "Koefisien adalah estimasi API; ukur ulang sebelum produksi.",
         )
-        val option = ProductOption(
-            ProductOptionId("option-${category.name.lowercase()}"), productTitle,
-            "Pilihan awal berdasarkan bukti bahan dan kebutuhan produksi.", category.displayName,
-            listOf(FieldId("quantity")), 1.0, UnitCode.KG,
-            listOf("hand-tools"), listOf("basic-making"),
-            scoreComponents = ScoreComponents(82.0, 90.0, 65.0, 80.0), provisionalProductScore = 79.0,
+        val optionSeeds = listOf(
+            Triple(productTitle, "Bentuk paling mudah untuk memulai dari bahan yang tersedia.", 79.0),
+            Triple(
+                when (category) {
+                    MaterialCategory.METAL -> "Rak dinding modular"
+                    MaterialCategory.CABLE -> "Lampu gantung anyam"
+                    MaterialCategory.PLASTIC -> "Organizer meja modular"
+                    MaterialCategory.WOOD -> "Bangku samping ringan"
+                    MaterialCategory.TEXTILE -> "Tas belanja berstruktur"
+                    MaterialCategory.ELECTRONICS -> "Casing alat sederhana"
+                },
+                "Nilai tambah lebih tinggi dengan sedikit langkah perakitan tambahan.", 84.0,
+            ),
+            Triple(
+                when (category) {
+                    MaterialCategory.METAL -> "Nampan aksen industrial"
+                    MaterialCategory.CABLE -> "Keranjang kabel rapi"
+                    MaterialCategory.PLASTIC -> "Pot tanaman gantung"
+                    MaterialCategory.WOOD -> "Papan pajangan minimal"
+                    MaterialCategory.TEXTILE -> "Panel dekorasi tekstur"
+                    MaterialCategory.ELECTRONICS -> "Jangan diproduksi dulu"
+                },
+                "Alternatif kreatif yang membantu mengurangi sisa material.", 73.0,
+            ),
         )
+        val categoryTools = when (category) {
+            MaterialCategory.METAL -> listOf("hand-tools", "measuring-tools", "finishing-tools")
+            MaterialCategory.CABLE -> listOf("hand-tools", "cutting-tools", "finishing-tools")
+            MaterialCategory.PLASTIC -> listOf("cutting-tools", "measuring-tools", "finishing-tools")
+            MaterialCategory.WOOD -> listOf("hand-tools", "measuring-tools", "finishing-tools")
+            MaterialCategory.TEXTILE -> listOf("hand-tools", "cutting-tools", "finishing-tools")
+            MaterialCategory.ELECTRONICS -> listOf("measuring-tools", "hand-tools", "finishing-tools")
+        }
+        val categorySkills = when (category) {
+            MaterialCategory.METAL -> listOf("basic-making", "precision-making", "surface-finishing")
+            MaterialCategory.CABLE -> listOf("basic-making", "precision-making", "surface-finishing")
+            MaterialCategory.PLASTIC -> listOf("basic-making", "precision-making", "surface-finishing")
+            MaterialCategory.WOOD -> listOf("basic-making", "precision-making", "surface-finishing")
+            MaterialCategory.TEXTILE -> listOf("basic-making", "precision-making", "surface-finishing")
+            MaterialCategory.ELECTRONICS -> listOf("precision-making", "basic-making", "surface-finishing")
+        }
+        val options = optionSeeds.mapIndexed { index, seed ->
+            ProductOption(
+                ProductOptionId("option-${category.name.lowercase()}-${index + 1}"), seed.first,
+                seed.second, category.displayName,
+                listOf(FieldId("quantity")), 1.0 + index * .5, UnitCode.KG,
+                listOf(categoryTools[index]), listOf(categorySkills[index]),
+                scoreComponents = ScoreComponents(78.0 + index * 4, 84.0 - index * 2, 65.0 + index * 7, 80.0 + index),
+                provisionalProductScore = seed.third,
+            )
+        }
         val completed = CompletedAnalysisResponse(
             id, category, confidence, observations, listOf(science), listOf(mathematics),
             SafetyAssessment(safetyOutcome, if (safetyOutcome == SafetyOutcome.ALLOW) emptyList() else listOf("Data keselamatan perlu diperhatikan sebelum produksi.")),
-            if (includeOption && safetyOutcome != SafetyOutcome.BLOCK) listOf(option) else emptyList(),
+            if (includeOption && safetyOutcome != SafetyOutcome.BLOCK) options else emptyList(),
         )
         check(AnalysisValidator.validate(completed) is Result.Success)
         return AnalysisFixture(category, confidence, initial, completed)

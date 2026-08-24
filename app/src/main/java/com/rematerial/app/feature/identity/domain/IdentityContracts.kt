@@ -12,6 +12,27 @@ typealias Result<T> = com.rematerial.app.core.model.Result<T>
 enum class Role { USER, ARTISAN, SELLER }
 
 @Serializable
+enum class ContactPreference { WHATSAPP, TELEPON }
+
+@Serializable
+data class ContactProfile(
+    val phone: String,
+    val whatsapp: String = phone,
+    val preferred: ContactPreference = ContactPreference.WHATSAPP,
+)
+
+@Serializable
+data class LocationProfile(
+    val area: String,
+    val address: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val source: String = "manual",
+) {
+    fun isResolved(): Boolean = area.isNotBlank() || address.isNotBlank()
+}
+
+@Serializable
 data class LoginRequest(
     val email: String,
     val password: String,
@@ -23,6 +44,9 @@ data class RegistrationRequest(
     val displayName: String,
     val email: String,
     val password: String,
+    val contact: ContactProfile? = null,
+    val location: LocationProfile? = null,
+    val role: Role = Role.USER,
 )
 
 @Serializable
@@ -31,6 +55,8 @@ data class Session(
     val email: String,
     val role: Role,
     val displayName: String,
+    val contact: ContactProfile? = null,
+    val location: LocationProfile? = null,
     val accessToken: String? = null,
 )
 

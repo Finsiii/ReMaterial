@@ -1,5 +1,10 @@
 package com.rematerial.app.feature.identity.presentation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,12 +43,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcons
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialTopBar
+import com.rematerial.app.feature.identity.domain.ContactPreference
 import com.rematerial.app.feature.identity.domain.Role
 
 @Composable
@@ -155,6 +163,15 @@ private fun LoginScreen(
     onEvent: (IdentityEvent) -> Unit,
 ) {
     val roleTitle = roleOptions.first { it.role == state.role }.title
+    val context = LocalContext.current
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        onEvent(IdentityEvent.LocationPermissionChanged(result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true))
+    }
+    LaunchedEffect(Unit) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (granted) onEvent(IdentityEvent.LocationPermissionChanged(true))
+    }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Column(
         modifier = Modifier
@@ -186,6 +203,53 @@ private fun LoginScreen(
                 placeholder = "Nama yang ingin ditampilkan",
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Next),
             )
+            Spacer(Modifier.height(16.dp))
+            RematerialField(
+                value = state.phone,
+                onValueChange = { onEvent(IdentityEvent.PhoneChanged(it)) },
+                label = "Nomor WhatsApp",
+                placeholder = "08xxxxxxxxxx",
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+            )
+            Spacer(Modifier.height(16.dp))
+            RematerialField(
+                value = state.whatsapp,
+                onValueChange = { onEvent(IdentityEvent.WhatsappChanged(it)) },
+                label = "WhatsApp lain (opsional)",
+                placeholder = "Kosongkan jika sama",
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Kontak utama: ${if (state.preferredContact == ContactPreference.WHATSAPP) "WhatsApp" else "Telepon"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = RematerialColors.DeepForest,
+                modifier = Modifier.clickable {
+                    onEvent(IdentityEvent.PreferredContactChanged(if (state.preferredContact == ContactPreference.WHATSAPP) ContactPreference.TELEPON else ContactPreference.WHATSAPP))
+                }.padding(vertical = 8.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Lokasi untuk rekomendasi terdekat", style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+                    Spacer(Modifier.height(5.dp))
+                    Text("Lokasi dipakai untuk mencari pengrajin di sekitar area kamu. Izin ditolak? Isi area manual saja.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                    Spacer(Modifier.height(12.dp))
+                    RematerialButton(
+                        "Gunakan lokasi saya",
+                        { locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)) },
+                        Modifier.fillMaxWidth(),
+                        enabled = !state.locationPermissionGranted,
+                        leadingIcon = RematerialIcons.MapPin,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (state.locationPermissionGranted) "Lokasi perangkat siap digunakan." else "Belum ada lokasi perangkat.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                    Spacer(Modifier.height(12.dp))
+                    RematerialField(state.area, { onEvent(IdentityEvent.AreaChanged(it)) }, "Area atau kota", placeholder = "Contoh: Bandung", keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Next))
+                    Spacer(Modifier.height(12.dp))
+                    RematerialField(state.address, { onEvent(IdentityEvent.AddressChanged(it)) }, "Alamat (opsional)", placeholder = "Area cukup untuk mulai", keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Next))
+                }
+            }
             Spacer(Modifier.height(16.dp))
         }
         RematerialField(

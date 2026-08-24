@@ -34,6 +34,8 @@ data class AnalysisUiState(
     val step: AnalysisStep = AnalysisStep.SCAN,
     val analysisId: AnalysisId = AnalysisId("analysis-${UUID.randomUUID()}"),
     val photoUri: String? = null,
+    val photoContentType: String? = null,
+    val photoSizeBytes: Long = 0L,
     val isManual: Boolean = false,
     val initial: InitialAnalysisResponse? = null,
     val prediction: CategoryPrediction? = null,
@@ -53,8 +55,15 @@ class AnalysisViewModel @Inject constructor(
     private val _state = MutableStateFlow(AnalysisUiState())
     val state: StateFlow<AnalysisUiState> = _state.asStateFlow()
 
-    fun attachPhoto(uri: String) {
-        _state.value = _state.value.copy(step = AnalysisStep.PREVIEW, photoUri = uri, isManual = false, error = null)
+    fun attachPhoto(uri: String, contentType: String? = null, sizeBytes: Long = 0L) {
+        _state.value = _state.value.copy(
+            step = AnalysisStep.PREVIEW,
+            photoUri = uri,
+            photoContentType = contentType,
+            photoSizeBytes = sizeBytes,
+            isManual = false,
+            error = null,
+        )
     }
 
     fun chooseManual(category: MaterialCategory) {
@@ -72,7 +81,11 @@ class AnalysisViewModel @Inject constructor(
             val result = gateway.start(
                 InitialAnalysisRequest(
                     analysisId = current.analysisId,
-                    photo = current.photoUri?.let { PhotoReference(it, "image/jpeg", 1_024) },
+                    photo = current.photoUri?.let { uri ->
+                        if (current.photoSizeBytes > 0L) {
+                            PhotoReference(uri, current.photoContentType ?: "image/jpeg", current.photoSizeBytes)
+                        } else null
+                    },
                     manualCategory = manualCategory,
                 ),
             )
@@ -119,6 +132,18 @@ class AnalysisViewModel @Inject constructor(
             _state.value = current.copy(error = "Lengkapi: ${missing.joinToString { it.label }}")
             return
         }
+        val invalidNumeric = response.requestedFields.filter { field ->
+            val raw = current.values[field.id.value].orEmpty()
+            when (field.type) {
+                InspectionFieldType.DECIMAL -> raw.replace(',', '.').toDoubleOrNull()?.isFinite() != true
+                InspectionFieldType.WHOLE -> raw.toIntOrNull() == null
+                else -> false
+            }
+        }
+        if (invalidNumeric.isNotEmpty()) {
+            _state.value = current.copy(error = "Periksa angka pada: ${invalidNumeric.joinToString { it.label }}")
+            return
+        }
         val observations = response.requestedFields.map { field -> field.toObservation(current.values[field.id.value].orEmpty()) }
         _state.value = current.copy(loading = true, error = null)
         viewModelScope.launch {
@@ -126,7 +151,7 @@ class AnalysisViewModel @Inject constructor(
                 is Result.Success -> _state.value = _state.value.copy(
                     step = AnalysisStep.RESULT,
                     result = result.value,
-                    selectedOptionId = result.value.productOptions.firstOrNull()?.optionId?.value,
+                    selectedOptionId = null,
                     loading = false,
                 )
                 is Result.Failure -> _state.value = _state.value.copy(loading = false, error = "Hasil belum bisa dibuat. Coba lagi.")
@@ -136,13 +161,14 @@ class AnalysisViewModel @Inject constructor(
 
     fun selectOption(id: String) { _state.value = _state.value.copy(selectedOptionId = id) }
     fun saveForMaking() { _state.value = _state.value.copy(saved = true) }
+    fun clearError() { _state.value = _state.value.copy(error = null) }
     fun reset() { _state.value = AnalysisUiState() }
 
     private fun RequestedField.toObservation(raw: String): Observation {
         if (raw.isBlank()) return Observation(id, availability = Availability.NOT_AVAILABLE, source = ValueSource.USER)
         val value = when (type) {
-            InspectionFieldType.DECIMAL -> InspectionValue.Decimal(raw.replace(',', '.').toDoubleOrNull() ?: 0.0)
-            InspectionFieldType.WHOLE -> InspectionValue.Whole(raw.toIntOrNull() ?: 0)
+            InspectionFieldType.DECIMAL -> InspectionValue.Decimal(raw.replace(',', '.').toDouble())
+            InspectionFieldType.WHOLE -> InspectionValue.Whole(raw.toInt())
             InspectionFieldType.BOOLEAN -> InspectionValue.BooleanValue(raw == "true")
             InspectionFieldType.CHOICE -> InspectionValue.Choice(raw)
             InspectionFieldType.TEXT -> InspectionValue.Text(raw)

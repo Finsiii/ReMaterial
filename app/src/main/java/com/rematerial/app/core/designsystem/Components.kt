@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -43,6 +45,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/** Shared footprint used by every floating dock and by screens reserving space for it. */
+object RematerialDockMetrics {
+    val horizontalPadding = 14.dp
+    val outerVerticalPadding = 8.dp
+    val surfaceHeight = 74.dp
+    val bottomGap = 8.dp
+    val minHitTarget = 48.dp
+    val reservedBottom = surfaceHeight + (outerVerticalPadding * 2) + bottomGap
+}
 
 @Composable
 fun RematerialIcon(
@@ -251,11 +263,14 @@ fun RematerialDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(
+                horizontal = RematerialDockMetrics.horizontalPadding,
+                vertical = RematerialDockMetrics.outerVerticalPadding,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight),
             color = RematerialColors.Surface,
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 8.dp,
@@ -263,7 +278,7 @@ fun RematerialDock(
             border = androidx.compose.foundation.BorderStroke(1.dp, RematerialColors.Line),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().height(58.dp).selectableGroup(),
+                modifier = Modifier.fillMaxWidth().fillMaxHeight().selectableGroup(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
@@ -272,7 +287,8 @@ fun RematerialDock(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .height(58.dp)
+                            .fillMaxHeight()
+                            .sizeIn(minHeight = RematerialDockMetrics.minHitTarget)
                             .selectable(
                                 selected = active,
                                 role = Role.Tab,
@@ -285,7 +301,7 @@ fun RematerialDock(
                         if (destination.isPrimary) {
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(48.dp)
                                     .clip(androidx.compose.foundation.shape.CircleShape)
                                     .background(RematerialColors.DeepForest),
                                 contentAlignment = Alignment.Center,

@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -19,6 +21,7 @@ import com.rematerial.app.feature.home.UserHomeScreen
 import com.rematerial.app.feature.analysis.presentation.AnalysisRoute
 import com.rematerial.app.feature.artisan.presentation.ArtisanWorkspaceRoute
 import com.rematerial.app.feature.identity.domain.Role
+import com.rematerial.app.core.model.SafetyOutcome
 import com.rematerial.app.feature.identity.presentation.IdentityEntryScreen
 import com.rematerial.app.feature.identity.presentation.IdentityEvent
 import com.rematerial.app.feature.identity.presentation.IdentityViewModel
@@ -64,7 +67,42 @@ private fun ReMaterialNavHost() {
     val navController = rememberNavController()
     val identityViewModel: IdentityViewModel = hiltViewModel()
     val productionViewModel: ProductionViewModel = hiltViewModel()
-    NavHost(navController = navController, startDestination = Routes.Identity) {
+    NavHost(
+        navController = navController,
+        startDestination = Routes.Identity,
+        enterTransition = {
+            val forward = routeRank(targetState.destination.route) >= routeRank(initialState.destination.route)
+            if (forward) {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(280))
+            } else {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(280))
+            }
+        },
+        exitTransition = {
+            val forward = routeRank(targetState.destination.route) >= routeRank(initialState.destination.route)
+            if (forward) {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(280))
+            } else {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(280))
+            }
+        },
+        popEnterTransition = {
+            val forward = routeRank(targetState.destination.route) >= routeRank(initialState.destination.route)
+            if (forward) {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(280))
+            } else {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(280))
+            }
+        },
+        popExitTransition = {
+            val forward = routeRank(targetState.destination.route) >= routeRank(initialState.destination.route)
+            if (forward) {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(280))
+            } else {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(280))
+            }
+        },
+    ) {
         composable(Routes.Identity) {
             IdentityEntryScreen(
                 viewModel = identityViewModel,
@@ -77,7 +115,9 @@ private fun ReMaterialNavHost() {
         }
         composable(Routes.UserHome) {
             UserHomeScreen(
-                onScan = { navController.navigate(Routes.Analysis) },
+                onScan = { navController.navigateUserDestination(Routes.Analysis) },
+                onProduction = { navController.navigateUserDestination(Routes.Production) },
+                onArtisans = { navController.navigate(Routes.ArtisanDiscovery) },
                 onDestinationSelected = { destination ->
                     when (destination) {
                         DockDestination.Beranda -> Unit
@@ -92,13 +132,15 @@ private fun ReMaterialNavHost() {
         composable(Routes.Analysis) {
             AnalysisRoute(
                 onClose = { navController.popBackStack() },
-                onOpenArtisan = { option ->
+                onOpenArtisan = { option, analysisId, safetyOutcome ->
                     productionViewModel.saveDraft(
                         ProductDraft(
                             optionId = option.optionId,
                             title = option.title,
                             materialSummary = "Material terpilih dari analisis · minimum ${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
                             minimumQuantity = "${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
+                            analysisId = analysisId.value,
+                            safetyAllowed = safetyOutcome != SafetyOutcome.BLOCK,
                         ),
                     )
                     navController.navigate(Routes.ArtisanDiscovery)
@@ -189,4 +231,16 @@ private fun NavHostController.navigateUserDestination(route: String) {
         launchSingleTop = true
         restoreState = true
     }
+}
+
+private fun routeRank(route: String?): Int = when (route) {
+    Routes.UserHome -> 0
+    Routes.Production, Routes.ArtisanDiscovery -> 1
+    Routes.Analysis -> 2
+    Routes.Market -> 3
+    Routes.Account -> 4
+    Routes.Orders -> 5
+    Routes.ArtisanWorkspace, Routes.SellerWorkspace -> 0
+    Routes.Identity -> -1
+    else -> 10
 }

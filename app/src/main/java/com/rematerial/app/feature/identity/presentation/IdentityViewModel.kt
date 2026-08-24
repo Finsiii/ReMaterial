@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.rematerial.app.core.model.DomainFailure
 import com.rematerial.app.core.model.Result
 import com.rematerial.app.feature.identity.domain.IdentityRepository
+import com.rematerial.app.feature.identity.domain.ContactPreference
+import com.rematerial.app.feature.identity.domain.ContactProfile
 import com.rematerial.app.feature.identity.domain.LoginRequest
+import com.rematerial.app.feature.identity.domain.LocationProfile
 import com.rematerial.app.feature.identity.domain.RegistrationRequest
 import com.rematerial.app.feature.identity.domain.Role
 import com.rematerial.app.feature.identity.domain.Session
@@ -23,6 +26,13 @@ data class IdentityState(
     val password: String = "",
     val displayName: String = "",
     val confirmPassword: String = "",
+    val phone: String = "",
+    val whatsapp: String = "",
+    val preferredContact: ContactPreference = ContactPreference.WHATSAPP,
+    val area: String = "",
+    val address: String = "",
+    val locationResolved: Boolean = false,
+    val locationPermissionGranted: Boolean = false,
     val isRegistering: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -37,6 +47,12 @@ sealed interface IdentityEvent {
     data class PasswordChanged(val value: String) : IdentityEvent
     data class DisplayNameChanged(val value: String) : IdentityEvent
     data class ConfirmPasswordChanged(val value: String) : IdentityEvent
+    data class PhoneChanged(val value: String) : IdentityEvent
+    data class WhatsappChanged(val value: String) : IdentityEvent
+    data class PreferredContactChanged(val value: ContactPreference) : IdentityEvent
+    data class AreaChanged(val value: String) : IdentityEvent
+    data class AddressChanged(val value: String) : IdentityEvent
+    data class LocationPermissionChanged(val granted: Boolean) : IdentityEvent
     data object Submit : IdentityEvent
     data object SignOut : IdentityEvent
 }
@@ -59,6 +75,12 @@ class IdentityViewModel @Inject constructor(
             is IdentityEvent.PasswordChanged -> _state.update { it.copy(password = event.value, errorMessage = null) }
             is IdentityEvent.DisplayNameChanged -> _state.update { it.copy(displayName = event.value, errorMessage = null) }
             is IdentityEvent.ConfirmPasswordChanged -> _state.update { it.copy(confirmPassword = event.value, errorMessage = null) }
+            is IdentityEvent.PhoneChanged -> _state.update { it.copy(phone = event.value, errorMessage = null) }
+            is IdentityEvent.WhatsappChanged -> _state.update { it.copy(whatsapp = event.value, errorMessage = null) }
+            is IdentityEvent.PreferredContactChanged -> _state.update { it.copy(preferredContact = event.value, errorMessage = null) }
+            is IdentityEvent.AreaChanged -> _state.update { it.copy(area = event.value, locationResolved = event.value.isNotBlank() || it.address.isNotBlank(), errorMessage = null) }
+            is IdentityEvent.AddressChanged -> _state.update { it.copy(address = event.value, locationResolved = event.value.isNotBlank() || it.area.isNotBlank(), errorMessage = null) }
+            is IdentityEvent.LocationPermissionChanged -> _state.update { it.copy(locationPermissionGranted = event.granted, locationResolved = event.granted || it.area.isNotBlank() || it.address.isNotBlank(), errorMessage = null) }
             IdentityEvent.Submit -> submit()
             IdentityEvent.SignOut -> _state.update { it.copy(session = null, errorMessage = null) }
         }
@@ -76,7 +98,16 @@ class IdentityViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             val result = if (current.isRegistering) {
-                repository.register(RegistrationRequest(current.displayName.trim(), current.email.trim(), current.password))
+                repository.register(
+                    RegistrationRequest(
+                        displayName = current.displayName.trim(),
+                        email = current.email.trim(),
+                        password = current.password,
+                        contact = ContactProfile(current.phone.trim(), current.whatsapp.trim().ifBlank { current.phone.trim() }, current.preferredContact),
+                        location = LocationProfile(current.area.trim(), current.address.trim(), source = if (current.locationPermissionGranted) "device" else "manual"),
+                        role = role,
+                    ),
+                )
             } else {
                 repository.login(LoginRequest(current.email.trim(), current.password, role))
             }
@@ -100,6 +131,8 @@ class IdentityViewModel @Inject constructor(
         !EMAIL_REGEX.matches(current.email.trim()) -> "Masukkan email yang valid."
         current.password.length < 8 -> "Kata sandi minimal 8 karakter."
         current.password != current.confirmPassword -> "Konfirmasi kata sandi belum sama."
+        !PHONE_REGEX.matches(current.phone.filter { it.isDigit() }) -> "Nomor WhatsApp wajib diisi dengan angka yang valid."
+        !current.locationResolved -> "Pilih lokasi perangkat atau isi area secara manual."
         else -> null
     }
 
@@ -111,5 +144,6 @@ class IdentityViewModel @Inject constructor(
 
     private companion object {
         val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+        val PHONE_REGEX = Regex("^(?:62|0)[0-9]{8,13}$")
     }
 }

@@ -1,7 +1,11 @@
 package com.rematerial.app.feature.production.presentation
 
+import android.content.Intent
+import android.net.Uri
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,6 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
@@ -54,8 +63,10 @@ import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
 import com.rematerial.app.core.designsystem.RematerialProgress
 import com.rematerial.app.core.designsystem.RematerialTopBar
+import com.rematerial.app.R
 import com.rematerial.app.feature.production.domain.ArtisanProfile
 import com.rematerial.app.feature.production.domain.ProductionRequest
+import com.rematerial.app.feature.production.domain.isReadyForProduction
 import com.rematerial.app.feature.production.domain.ProductionStatus
 
 @Composable
@@ -70,7 +81,7 @@ fun ProductionRoute(
         when (state.page) {
             ProductionPage.DISCOVERY -> DiscoveryScreen(state, onBack, viewModel::setArea, viewModel::search, viewModel::openDetail, viewModel::openHistory)
             ProductionPage.DETAIL -> ArtisanDetailScreen(state, viewModel::backToDiscovery, viewModel::openForm)
-            ProductionPage.FORM -> ProductionFormScreen(state, viewModel::backToDiscovery, viewModel::setQuantity, viewModel::setNotes, viewModel::setAddress, viewModel::setTargetDate, viewModel::submit)
+            ProductionPage.FORM -> ProductionFormScreen(state, viewModel::backToDiscovery, viewModel::setQuantity, viewModel::setNotes, viewModel::setAddress, viewModel::setTargetDate, viewModel::setPhone, viewModel::setWhatsapp, viewModel::setPreferredContact, viewModel::submit)
             ProductionPage.CONFIRMED -> ConfirmationScreen(state.submitted, viewModel::openHistory, viewModel::backToDiscovery)
             ProductionPage.HISTORY -> ProductionHistoryScreen(state.requests, onBack, viewModel::openRequest)
             ProductionPage.REQUEST -> state.submitted?.let { RequestDetailScreen(it, viewModel::openHistory, viewModel::backToDiscovery) }
@@ -92,33 +103,24 @@ private fun DiscoveryScreen(
 ) {
     var mapMode by rememberSaveable { mutableStateOf(true) }
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 92.dp + bottom)) {
-        RematerialTopBar("Buat di Pengrajin", onBack = onBack, actionIcon = RematerialIcons.History, actionDescription = "Riwayat produksi", onAction = onHistory)
-        Spacer(Modifier.height(8.dp))
-        Text("Temukan tangan yang tepat.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
-        Spacer(Modifier.height(8.dp))
-        Text("Kami mencarikan pengrajin di sekitar area pilihanmu untuk mewujudkan ${state.draft.title.lowercase()}.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-        Spacer(Modifier.height(18.dp))
-        RematerialField(state.area, onAreaChanged, "Area pencarian", placeholder = "Contoh: Cicendo atau Bandung", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Lokasi perangkat tidak digunakan. Cari area secara manual.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.weight(1f))
-            Text("Cari", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable(role = Role.Button, onClick = onSearch).padding(8.dp))
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text("Peta", style = MaterialTheme.typography.labelLarge, color = if (mapMode) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.clickable { mapMode = true }.padding(vertical = 8.dp))
-            Text("Daftar", style = MaterialTheme.typography.labelLarge, color = if (!mapMode) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.clickable { mapMode = false }.padding(vertical = 8.dp))
-        }
-        if (mapMode) {
-            MapCanvas(state.artisans, Modifier.fillMaxWidth().height(190.dp))
-            Spacer(Modifier.height(14.dp))
-        }
-        Text("Pengrajin yang tersedia", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
-        Spacer(Modifier.height(6.dp))
-        if (state.artisans.isEmpty()) Text("Belum ada pengrajin di area ini.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-            items(state.artisans, key = { it.id }) { artisan -> ArtisanListRow(artisan, onArtisanSelected) }
+    LazyColumn(
+        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(bottom = 92.dp + bottom),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item { RematerialTopBar("Buat di Pengrajin", onBack = onBack, actionIcon = RematerialIcons.History, actionDescription = "Riwayat produksi", onAction = onHistory) }
+        item { Text("Temukan tangan yang tepat.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink) }
+        item { Text(if (state.draft.title.isBlank()) "Produksi dimulai dari analisis bahan. Pilih rekomendasi agar kami bisa mencarikan pengrajin yang sesuai." else "Kami mencarikan pengrajin di sekitar area pilihanmu untuk mewujudkan ${state.draft.title.lowercase()}.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted) }
+        if (!state.draft.isReadyForProduction()) {
+            item { Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, RematerialColors.Line)) { Column(Modifier.padding(18.dp)) { Text("Analisis bahan dulu", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("Pilih satu rekomendasi produk dari hasil analisis untuk membuka daftar pengrajin dan permintaan produksi.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(12.dp)); Text("Riwayat produksi tetap bisa dilihat dari ikon di atas.", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest) } } }
+        } else {
+            item { RematerialField(state.area, onAreaChanged, "Area pencarian", placeholder = "Contoh: Cicendo atau Bandung", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)) }
+            item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("Gunakan area manual untuk hasil yang lebih relevan.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.weight(1f)); Text("Cari", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable(role = Role.Button, onClick = onSearch).padding(8.dp)) } }
+            item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) { Text("Peta", style = MaterialTheme.typography.labelLarge, color = if (mapMode) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.clickable { mapMode = true }.padding(vertical = 8.dp)); Text("Daftar", style = MaterialTheme.typography.labelLarge, color = if (!mapMode) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.clickable { mapMode = false }.padding(vertical = 8.dp)) } }
+            if (mapMode) item { MapCanvas(state.artisans, Modifier.fillMaxWidth().height(190.dp)) }
+            item { Text("Pengrajin yang tersedia", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink) }
+            if (state.artisans.isEmpty()) item { Text("Belum ada pengrajin di area ini. Coba area lain.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted) }
+            else items(state.artisans, key = { it.id }) { artisan -> ArtisanListRow(artisan, onArtisanSelected) }
         }
     }
 }
@@ -167,16 +169,26 @@ private fun ArtisanListRow(artisan: ArtisanProfile, onClick: (ArtisanProfile) ->
 @Composable
 private fun ArtisanDetailScreen(state: ProductionState, onBack: () -> Unit, onContinue: () -> Unit) {
     val artisan = state.selectedArtisan ?: return
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 24.dp)) {
-        RematerialTopBar("Profil pengrajin", onBack = onBack)
-        LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
-            item {
-                Spacer(Modifier.height(18.dp)); Text(artisan.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("${artisan.area} · ${artisan.distance}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp))
-                DetailSection("Tentang pengrajin", artisan.about); DetailSection("Kemampuan", artisan.capabilities.joinToString("\n")); DetailSection("Kecocokan untuk produkmu", artisan.matchReason); DetailSection("Perkiraan proses", "${artisan.eta}\n${artisan.priceRange}\n${artisan.availability}")
-                Spacer(Modifier.height(14.dp)); Text("Ringkasan pilihan", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(8.dp)); Text("${state.draft.title}\n${state.draft.materialSummary}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialButton("Lanjutkan permintaan", onContinue, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowRight)
-            }
-        }
+    val context = LocalContext.current
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)) {
+        item { RematerialTopBar("Profil pengrajin", onBack = onBack) }
+        item { Spacer(Modifier.height(18.dp)); Text(artisan.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("${artisan.area} · ${artisan.distance}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)) }
+        item { DetailSection("Tentang pengrajin", artisan.about) }
+        item { DetailSection("Kemampuan", artisan.capabilities.joinToString("\n")) }
+        item { DetailSection("Kecocokan untuk produkmu", artisan.matchReason) }
+        item { DetailSection("Perkiraan proses", "${artisan.eta}\n${artisan.priceRange}\n${artisan.availability}") }
+        item { Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { Column(Modifier.weight(1f)) { Text("${artisan.rating} / 5", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Text("Penilaian", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; Column(Modifier.weight(1f)) { Text(artisan.completedJobs, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink); Text(artisan.responseTime, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) } } }
+        item { Text("Portofolio pilihan", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) { items(artisan.portfolioImageKeys.ifEmpty { listOf("material_metal", "material_wood") }) { key -> Image(painterResource(portfolioResource(key)), "Contoh karya ${artisan.name}", Modifier.size(146.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop) } }; Spacer(Modifier.height(18.dp)) }
+        item { Text("Lokasi kerja", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); MapCanvas(listOf(artisan), Modifier.fillMaxWidth().height(170.dp)); Spacer(Modifier.height(7.dp)); Text("${artisan.area}\n${artisan.workingHours}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Buka rute  →", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${artisan.latitude},${artisan.longitude}?q=${artisan.latitude},${artisan.longitude}"))) } }.padding(vertical = 8.dp)) }
+        item { DetailSection("Kontak", "WhatsApp ${artisan.whatsapp}\n${artisan.verifiedState}") }
+        item { Spacer(Modifier.height(14.dp)); Text("Ringkasan pilihan", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(8.dp)); Text("${state.draft.title}\n${state.draft.materialSummary}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialButton("Lanjutkan permintaan", onContinue, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowRight) }
     }
+}
+
+private fun portfolioResource(key: String): Int = when (key) {
+    "material_wood" -> R.drawable.material_wood
+    "material_textile" -> R.drawable.material_textile
+    else -> R.drawable.material_metal
 }
 
 @Composable
@@ -192,15 +204,23 @@ private fun ProductionFormScreen(
     onNotes: (String) -> Unit,
     onAddress: (String) -> Unit,
     onTargetDate: (String) -> Unit,
+    onPhone: (String) -> Unit,
+    onWhatsapp: (String) -> Unit,
+    onPreferredContact: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
-        RematerialTopBar("Detail permintaan", onBack = onBack)
-        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-            item {
-                Spacer(Modifier.height(16.dp)); Text("Hampir jadi.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Lengkapi detail agar pengrajin bisa memberi estimasi yang jelas.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Produk", "${state.draft.title}\n${state.draft.materialSummary}"); RematerialField(state.quantity, onQuantity, "Kuantitas", placeholder = "Contoh: 2 unit"); Spacer(Modifier.height(16.dp)); RematerialField(state.address, onAddress, "Alamat pengiriman", placeholder = "Alamat lengkap"); Spacer(Modifier.height(16.dp)); RematerialField(state.targetDate, onTargetDate, "Target selesai", placeholder = "Contoh: 20 September 2026"); Spacer(Modifier.height(16.dp)); RematerialField(state.notes, onNotes, "Catatan untuk pengrajin", placeholder = "Bahan, ukuran, atau detail yang penting"); state.error?.let { Spacer(Modifier.height(10.dp)); Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9B3F2F)) }; Spacer(Modifier.height(22.dp)); RematerialButton("Kirim permintaan", onSubmit, Modifier.fillMaxWidth(), enabled = !state.loading, leadingIcon = RematerialIcons.ArrowRight)
-            }
-        }
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)) {
+        item { RematerialTopBar("Detail permintaan", onBack = onBack) }
+        item { Spacer(Modifier.height(16.dp)); Text("Hampir jadi.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Lengkapi detail agar pengrajin bisa memberi estimasi yang jelas.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Produk", "${state.draft.title}\n${state.draft.materialSummary}") }
+        item { RematerialField(state.quantity, onQuantity, "Kuantitas", placeholder = "Contoh: 2 unit") }
+        item { RematerialField(state.address, onAddress, "Alamat pengiriman", placeholder = "Alamat lengkap") }
+        item { RematerialField(state.phone, onPhone, "Nomor WhatsApp", placeholder = "08xxxxxxxxxx", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) }
+        item { RematerialField(state.whatsapp, onWhatsapp, "WhatsApp (opsional)", placeholder = "Kosongkan jika sama", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) }
+        item { Text("Kontak utama: ${state.preferredContact}. Ketuk untuk mengganti.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest, modifier = Modifier.clickable { onPreferredContact(if (state.preferredContact == "WhatsApp") "Telepon" else "WhatsApp") }.padding(vertical = 12.dp)) }
+        item { RematerialField(state.targetDate, onTargetDate, "Target selesai", placeholder = "Contoh: 20 September 2026") }
+        item { RematerialField(state.notes, onNotes, "Catatan untuk pengrajin", placeholder = "Bahan, ukuran, atau detail yang penting") }
+        state.error?.let { error -> item { Text(error, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9B3F2F)) } }
+        item { Spacer(Modifier.height(14.dp)); RematerialButton("Kirim permintaan", onSubmit, Modifier.fillMaxWidth(), enabled = !state.loading, leadingIcon = RematerialIcons.ArrowRight) }
     }
 }
 
@@ -213,10 +233,13 @@ private fun ConfirmationScreen(request: ProductionRequest?, onHistory: () -> Uni
 
 @Composable
 private fun ProductionHistoryScreen(requests: List<ProductionRequest>, onBack: () -> Unit, onOpen: (ProductionRequest) -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) {
-        RematerialTopBar("Produksi", onBack = onBack)
-        Spacer(Modifier.height(18.dp)); Text("Perjalanan karyamu", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Pantau permintaan yang sedang berjalan dan riwayat produksi.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(24.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) { items(requests, key = { it.id }) { request -> RequestRow(request, onOpen) } }
+    LazyColumn(
+        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+    ) {
+        item { RematerialTopBar("Produksi", onBack = onBack); Spacer(Modifier.height(18.dp)); Text("Perjalanan karyamu", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Pantau permintaan yang sedang berjalan dan riwayat produksi.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(12.dp)) }
+        items(requests, key = { it.id }) { request -> RequestRow(request, onOpen) }
     }
 }
 
@@ -229,11 +252,11 @@ private fun RequestRow(request: ProductionRequest, onOpen: (ProductionRequest) -
 
 @Composable
 private fun RequestDetailScreen(request: ProductionRequest, onBack: () -> Unit, onHome: () -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) {
-        RematerialTopBar("Detail produksi", onBack = onBack)
-        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-            item { Spacer(Modifier.height(18.dp)); Text(request.draft.title, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("${request.id} · ${request.artisan.name}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Status saat ini", request.status.label); RematerialProgress(request.status.progress); Spacer(Modifier.height(22.dp)); Text("Linimasa", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); TimelineRow("Permintaan dikirim", "Detail material dan kebutuhan diterima", true); TimelineRow("Ditinjau pengrajin", "Kesesuaian alat dan estimasi diperiksa", request.status.progress >= .4f); TimelineRow("Dikerjakan", "Pengrajin mulai membentuk karya", request.status.progress >= .7f); TimelineRow("Siap dikirim", "Karya selesai dan menunggu pengiriman", request.status.progress >= 1f); Spacer(Modifier.height(18.dp)); DetailSection("Pengiriman", "${request.address}\nTarget ${request.targetDate}"); DetailSection("Catatan", request.notes); RematerialButton("Kembali ke daftar produksi", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
-        }
+    LazyColumn(
+        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+    ) {
+        item { RematerialTopBar("Detail produksi", onBack = onBack); Spacer(Modifier.height(18.dp)); Text(request.draft.title, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("${request.id} · ${request.artisan.name}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Status saat ini", request.status.label); RematerialProgress(request.status.progress); Spacer(Modifier.height(22.dp)); Text("Linimasa", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); TimelineRow("Permintaan dikirim", "Detail material dan kebutuhan diterima", true); TimelineRow("Ditinjau pengrajin", "Kesesuaian alat dan estimasi diperiksa", request.status.progress >= .4f); TimelineRow("Dikerjakan", "Pengrajin mulai membentuk karya", request.status.progress >= .7f); TimelineRow("Siap dikirim", "Karya selesai dan menunggu pengiriman", request.status.progress >= 1f); Spacer(Modifier.height(18.dp)); DetailSection("Pengiriman", "${request.address}\nTarget ${request.targetDate}"); DetailSection("Kontak", "${request.preferredContact}: ${if (request.preferredContact == "WhatsApp") request.whatsapp.ifBlank { request.phone } else request.phone}"); DetailSection("Catatan", request.notes.ifBlank { "Tidak ada catatan tambahan." }); RematerialButton("Kembali ke daftar produksi", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
     }
 }
 

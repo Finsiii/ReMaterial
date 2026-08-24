@@ -72,6 +72,7 @@ object RematerialIcons {
     val ArrowLeft = R.drawable.lucide_ic_arrow_left
     val Bell = R.drawable.lucide_ic_bell
     val Camera = R.drawable.lucide_ic_camera
+    val Flash = R.drawable.lucide_ic_zap
     val ChevronRight = R.drawable.lucide_ic_chevron_right
     val Plus = R.drawable.lucide_ic_plus
     val Search = R.drawable.lucide_ic_search

@@ -8,6 +8,7 @@ import com.rematerial.app.feature.production.domain.ProductDraft
 import com.rematerial.app.feature.production.domain.ProductionRequest
 import com.rematerial.app.feature.production.domain.ProductionRequestInput
 import com.rematerial.app.feature.production.domain.ProductionRepository
+import com.rematerial.app.feature.production.domain.isReadyForProduction
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,9 @@ data class ProductionState(
     val notes: String = "",
     val address: String = "",
     val targetDate: String = "",
+    val phone: String = "",
+    val whatsapp: String = "",
+    val preferredContact: String = "WhatsApp",
     val requests: List<ProductionRequest> = emptyList(),
     val submitted: ProductionRequest? = null,
     val loading: Boolean = false,
@@ -57,22 +61,42 @@ class ProductionViewModel @Inject constructor(
             }
         }
     }
-    fun openDetail(artisan: ArtisanProfile) { _state.update { it.copy(selectedArtisan = artisan, page = ProductionPage.DETAIL, error = null) } }
-    fun openForm() { _state.update { it.copy(page = ProductionPage.FORM, error = null) } }
+    fun openDetail(artisan: ArtisanProfile) {
+        if (!_state.value.draft.isReadyForProduction()) {
+            _state.update { it.copy(page = ProductionPage.DISCOVERY, error = "Analisis bahan dulu untuk melihat pengrajin yang cocok.") }
+        } else {
+            _state.update { it.copy(selectedArtisan = artisan, page = ProductionPage.DETAIL, error = null) }
+        }
+    }
+    fun openForm() {
+        val current = _state.value
+        if (!current.draft.isReadyForProduction()) {
+            _state.update { it.copy(page = ProductionPage.DISCOVERY, error = "Analisis bahan dulu untuk memilih produk yang aman dibuat.") }
+        } else {
+            _state.update { it.copy(page = ProductionPage.FORM, error = null) }
+        }
+    }
     fun setQuantity(value: String) { _state.update { it.copy(quantity = value) } }
     fun setNotes(value: String) { _state.update { it.copy(notes = value) } }
     fun setAddress(value: String) { _state.update { it.copy(address = value) } }
     fun setTargetDate(value: String) { _state.update { it.copy(targetDate = value) } }
+    fun setPhone(value: String) { _state.update { it.copy(phone = value) } }
+    fun setWhatsapp(value: String) { _state.update { it.copy(whatsapp = value) } }
+    fun setPreferredContact(value: String) { _state.update { it.copy(preferredContact = value) } }
     fun submit() {
         val current = _state.value
         val artisan = current.selectedArtisan ?: return
-        if (current.quantity.isBlank() || current.address.isBlank() || current.targetDate.isBlank()) {
-            _state.update { it.copy(error = "Lengkapi kuantitas, alamat, dan target selesai.") }
+        if (!current.draft.isReadyForProduction()) {
+            _state.update { it.copy(page = ProductionPage.DISCOVERY, error = "Analisis bahan dulu untuk memilih produk yang aman dibuat.") }
+            return
+        }
+        if (current.quantity.isBlank() || current.address.isBlank() || current.targetDate.isBlank() || current.phone.filter { it.isDigit() }.length < 10) {
+            _state.update { it.copy(error = "Lengkapi kuantitas, alamat, target selesai, dan nomor kontak.") }
             return
         }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
-            when (val result = repository.submit(ProductionRequestInput(artisan.id, current.draft, current.quantity, current.notes, current.address, current.targetDate))) {
+            when (val result = repository.submit(ProductionRequestInput(artisan.id, current.draft, current.quantity, current.notes, current.address, current.targetDate, current.phone, current.whatsapp, current.preferredContact))) {
                 is Result.Success -> _state.update { it.copy(submitted = result.value, page = ProductionPage.CONFIRMED, loading = false) }
                 is Result.Failure -> _state.update { it.copy(loading = false, error = "Permintaan belum dapat dikirim.") }
             }
