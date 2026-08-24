@@ -54,7 +54,10 @@ private val materialExamples = listOf(
 )
 
 @Composable
-fun UserHomeScreen() {
+fun UserHomeScreen(
+    onScan: () -> Unit = {},
+    onDestinationSelected: (DockDestination) -> Unit = {},
+) {
     var selectedName by rememberSaveable { mutableStateOf(DockDestination.Beranda.name) }
     val selected = DockDestination.valueOf(selectedName)
     val navigationBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -93,11 +96,11 @@ fun UserHomeScreen() {
                 }
             }
             Spacer(Modifier.height(20.dp))
-            RematerialButton(text = "Analisis Material", onClick = {}, leadingIcon = RematerialIcons.Camera, modifier = Modifier.fillMaxWidth())
+            RematerialButton(text = "Analisis Material", onClick = onScan, leadingIcon = RematerialIcons.Camera, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(18.dp))
             Text("Aktivitas terbaru", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
             RematerialListRow(title = "Kabel tembaga", supportingText = "Dianalisis hari ini · 2,45 kg", leadingIcon = RematerialIcons.History, onClick = {})
         }
-        RematerialDock(selected = selected, onDestinationSelected = { selectedName = it.name }, modifier = Modifier.align(Alignment.BottomCenter))
+        RematerialDock(selected = selected, onDestinationSelected = { selectedName = it.name; onDestinationSelected(it) }, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
