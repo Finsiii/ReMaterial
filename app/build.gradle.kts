@@ -98,9 +98,3 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.app.cash.turbine)
 }
-
-// The locked Compose BOM currently publishes metadata for AGP 9.1/compileSdk 37,
-// while this project is intentionally locked to AGP 8.13.2 and compileSdk 36.
-tasks.matching { it.name == "checkDebugAarMetadata" }.configureEach {
-    enabled = false
-}

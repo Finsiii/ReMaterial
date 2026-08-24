@@ -7,7 +7,7 @@ if [[ -z "${tracked_paths}" ]]; then
     exit 0
 fi
 
-forbidden_path_pattern='(^|/)(docs?|documentation|ai|agents?|prompts?|instructions?|secrets?|signing|identity-documents)(/|$)|(^|/)(AGENTS|CLAUDE|GEMINI|CODEX|COPILOT|cursor-rules|copilot-instructions)\.md$|(^|/)(.*\.(prompt|prompts)|prompt|prompts|instructions)\.(md|txt)$|(^|/)(.*\.(jks|keystore)|keystore\.properties|google-services\.json|.*\.ktp\..*)$'
+forbidden_path_pattern='(^|/)(docs?|documentation|ai|agents?|prompts?|instructions?|secrets?|signing|credentials?)(/|$)|(^|/)\.(superpowers|codex|agents)(/|$)|(^|/)(identity(-documents)?|ktp|passport)(\.[^/]*)?(/|$)|(^|/)(\.env[^/]*|local\.properties|keystore\.properties|google-services\.json|credentials?\.[^/]*)$|(^|/)(AGENTS|CLAUDE|GEMINI|CODEX|COPILOT|cursor-rules|copilot-instructions)\.md$|(^|/)(.*\.(prompt|prompts)|prompt|prompts|instructions)\.(md|txt)$|(^|/)([^/]+\.(pem|p12|jks|keystore)|.*\.ktp\..*|.*\.passport\..*|.*\.identity\..*)$'
 forbidden_paths="$(printf '%s\n' "${tracked_paths}" | grep -E -i "${forbidden_path_pattern}" || true)"
 if [[ -n "${forbidden_paths}" ]]; then
     echo "Forbidden tracked path(s):" >&2
