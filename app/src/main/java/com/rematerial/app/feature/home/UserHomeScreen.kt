@@ -70,7 +70,7 @@ fun UserHomeScreen(
                 .padding(horizontal = 22.dp, vertical = 16.dp)
                 .padding(bottom = dockFootprint + navigationBottomInset),
         ) {
-            RematerialTopBar(title = "ReMaterial", actionIcon = RematerialIcons.Bell, actionDescription = "Notifikasi", onAction = {})
+            RematerialTopBar(title = "ReMaterial")
             Spacer(Modifier.height(28.dp))
             Text("Selamat datang, Dika", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
             Spacer(Modifier.height(6.dp))
@@ -83,7 +83,7 @@ fun UserHomeScreen(
                     Surface(
                         modifier = Modifier
                             .size(width = 124.dp, height = 156.dp)
-                            .clickable(role = Role.Button, onClick = {})
+                            .clickable(role = Role.Button, onClick = onScan)
                             .semantics { contentDescription = "Pilih material ${material.label.lowercase()}" },
                         color = RematerialColors.Surface,
                         shape = RoundedCornerShape(14.dp),
@@ -99,7 +99,7 @@ fun UserHomeScreen(
             RematerialButton(text = "Analisis Material", onClick = onScan, leadingIcon = RematerialIcons.Camera, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(18.dp))
             Text("Aktivitas terbaru", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
-            RematerialListRow(title = "Kabel tembaga", supportingText = "Dianalisis hari ini · 2,45 kg", leadingIcon = RematerialIcons.History, onClick = {})
+            RematerialListRow(title = "Kabel tembaga", supportingText = "Dianalisis hari ini · 2,45 kg", leadingIcon = RematerialIcons.History, onClick = onScan)
         }
         RematerialDock(selected = selected, onDestinationSelected = { selectedName = it.name; onDestinationSelected(it) }, modifier = Modifier.align(Alignment.BottomCenter))
     }

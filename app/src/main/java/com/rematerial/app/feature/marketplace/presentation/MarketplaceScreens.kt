@@ -69,17 +69,18 @@ fun MarketplaceRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var pageName by rememberSaveable { mutableStateOf(MarketPage.HOME.name) }
+    var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     val page = MarketPage.valueOf(pageName)
     val go = { target: MarketPage -> pageName = target.name }
     Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
         when (page) {
             MarketPage.HOME -> MarketHomeScreen(state, viewModel::search, viewModel::category, viewModel::open, { go(MarketPage.CART) })
-            MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME) }, { viewModel.add(it); go(MarketPage.CART) }) } ?: run { go(MarketPage.HOME) }
+            MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME) }, { viewModel.add(it); go(MarketPage.CART) }) } ?: MarketHomeScreen(state, viewModel::search, viewModel::category, viewModel::open, { go(MarketPage.CART) })
             MarketPage.CART -> CartScreen(state.cart, state.sellerSwitchPrompt, viewModel::increment, viewModel::decrement, viewModel::remove, viewModel::dismissPrompt, { state.selectedProduct?.let(viewModel::confirmSellerSwitch) }, { go(MarketPage.CHECKOUT) }, { go(MarketPage.HOME) })
             MarketPage.CHECKOUT -> CheckoutScreen(state.cart, { viewModel.placeOrder(it); go(MarketPage.SUCCESS) }, { go(MarketPage.CART) })
             MarketPage.SUCCESS -> OrderSuccessScreen(state.lastOrder, { viewModel.clearLastOrder(); go(MarketPage.HOME) }, { go(MarketPage.ORDERS) })
-            MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { viewModel.open(state.products.firstOrNull { p -> p.id == it.lines.firstOrNull()?.product?.id } ?: state.products.first()); go(MarketPage.ORDER_DETAIL) })
-            MarketPage.ORDER_DETAIL -> state.orders.firstOrNull()?.let { OrderDetailScreen(it, { go(MarketPage.ORDERS) }) } ?: go(MarketPage.ORDERS)
+            MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
+            MarketPage.ORDER_DETAIL -> state.orders.firstOrNull { it.id == selectedOrderId }?.let { OrderDetailScreen(it, { go(MarketPage.ORDERS) }) } ?: OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
         }
         if (page == MarketPage.HOME) {
             RematerialDock(DockDestination.Pasar, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
@@ -187,7 +188,7 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 @Composable private fun CheckoutScreen(lines: List<CartLine>, onPlace: (CheckoutDraft) -> Unit, onBack: () -> Unit) {
     var address by rememberSaveable { mutableStateOf("Jl. Riau No. 18, Bandung") }; var delivery by rememberSaveable { mutableStateOf("Reguler · 2–4 hari") }; var payment by rememberSaveable { mutableStateOf("Transfer bank demo") }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
-        RematerialTopBar("Checkout", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 28.dp)) { item { Spacer(Modifier.height(18.dp)); Text("Hampir selesai.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Semua pilihan di bawah masih demo dan belum terhubung ke pembayaran nyata.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialField(address, { address = it }, "Alamat pengiriman"); Spacer(Modifier.height(18.dp)); SelectionField("Pengiriman", delivery, listOf("Reguler · 2–4 hari", "Ekonomis · 4–7 hari")) { delivery = it }; Spacer(Modifier.height(18.dp)); SelectionField("Metode pembayaran", payment, listOf("Transfer bank demo", "Dompet digital demo")) { payment = it }; Spacer(Modifier.height(20.dp)); Text("Ringkasan pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(8.dp)); lines.forEach { Text("${it.quantity}× ${it.product.title}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp)) }; Spacer(Modifier.height(20.dp)); RematerialButton("Buat pesanan", { onPlace(CheckoutDraft(address, delivery, payment)) }, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Check) } }
+        RematerialTopBar("Checkout", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 28.dp)) { item { Spacer(Modifier.height(18.dp)); Text("Hampir selesai.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Semua pilihan di bawah masih demo dan belum terhubung ke pembayaran nyata.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialField(address, { address = it }, "Alamat pengiriman"); Spacer(Modifier.height(18.dp)); SelectionField("Pengiriman", delivery, listOf("Reguler · 2–4 hari", "Ekonomis · 4–7 hari")) { delivery = it }; Spacer(Modifier.height(18.dp)); SelectionField("Metode pembayaran", payment, listOf("Transfer bank demo", "Dompet digital demo")) { payment = it }; Spacer(Modifier.height(20.dp)); Text("Ringkasan pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(8.dp)); lines.forEach { Text("${it.quantity}× ${it.product.title}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp)) }; Spacer(Modifier.height(20.dp)); RematerialButton("Buat pesanan", { onPlace(CheckoutDraft(address, delivery, payment)) }, Modifier.fillMaxWidth(), enabled = address.isNotBlank(), leadingIcon = RematerialIcons.Check) } }
     }
 }
 
@@ -201,7 +202,34 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 
 @Composable private fun OrderTimeline(status: OrderStatus) { Column { Text("Status pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); OrderStatus.entries.forEach { item -> Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (item.ordinal <= status.ordinal) RematerialIcons.CircleCheck else RematerialIcons.CircleCheck, null, Modifier.size(19.dp), if (item.ordinal <= status.ordinal) RematerialColors.DeepForest else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(item.label, style = MaterialTheme.typography.bodyMedium, color = if (item.ordinal <= status.ordinal) RematerialColors.Ink else RematerialColors.Muted) } } } }
 
-@Composable fun UserAccountRoute(onBack: () -> Unit, onAnalysis: () -> Unit, onProduction: () -> Unit, onOrders: () -> Unit, onLogout: () -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Akun", onBack = onBack); Spacer(Modifier.height(22.dp)); Text("Dika", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text("user@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); Text("Ruangmu", style = MaterialTheme.typography.titleLarge); AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis); AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction); AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders); Spacer(Modifier.height(24.dp)); Text("Pengaturan", style = MaterialTheme.typography.titleLarge); AccountRow("Preferensi", "Notifikasi dan keamanan akun", RematerialIcons.Settings, {}); Spacer(Modifier.height(24.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut) } }
+@Composable
+fun UserAccountRoute(
+    onBack: () -> Unit,
+    onAnalysis: () -> Unit,
+    onProduction: () -> Unit,
+    onOrders: () -> Unit,
+    onDestinationSelected: (DockDestination) -> Unit,
+    onLogout: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 94.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+            RematerialTopBar("Akun", onBack = onBack)
+            Spacer(Modifier.height(22.dp))
+            Text("Dika", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
+            Text("user@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            Spacer(Modifier.height(28.dp))
+            Text("Ruangmu", style = MaterialTheme.typography.titleLarge)
+            AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis)
+            AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction)
+            AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders)
+            Spacer(Modifier.height(24.dp))
+            Text("Akun siap digunakan.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            Spacer(Modifier.height(24.dp))
+            RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut)
+        }
+        RematerialDock(DockDestination.Akun, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
+    }
+}
 
 @Composable private fun AccountRow(title: String, supporting: String, icon: Int, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(icon, null, Modifier.size(21.dp), RematerialColors.DeepForest); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; RematerialIcon(RematerialIcons.ChevronRight, null, Modifier.size(18.dp), RematerialColors.Muted) } }
 

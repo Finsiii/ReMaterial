@@ -51,7 +51,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
-import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
@@ -282,20 +281,3 @@ private fun ProductOptionCard(option: ProductOption, selected: Boolean, onSelect
 }
 
 private fun ProductOption.requiredToolsText(): String = requiredToolIds.joinToString { it.replace('-', ' ') }
-
-@Composable
-fun UserPlaceholderScreen(title: String, description: String, destination: DockDestination, onBack: () -> Unit) {
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 92.dp + bottom)) {
-            RematerialTopBar(title, onBack = onBack)
-            Spacer(Modifier.height(36.dp))
-            Text(title, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
-            Spacer(Modifier.height(10.dp))
-            Text(description, style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
-            Spacer(Modifier.height(28.dp))
-            ResultSection("Segera hadir", "Kami sedang menyiapkan pengalaman ${title.lowercase()} yang terhubung dengan data nyata. Kamu bisa kembali ke Beranda untuk menganalisis material lain.")
-        }
-        com.rematerial.app.core.designsystem.RematerialDock(destination, { selected -> if (selected == DockDestination.Beranda) onBack() }, Modifier.align(Alignment.BottomCenter))
-    }
-}

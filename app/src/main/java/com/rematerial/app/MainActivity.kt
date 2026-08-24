@@ -17,13 +17,11 @@ import com.rematerial.app.core.designsystem.RematerialColors
 import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.feature.home.UserHomeScreen
 import com.rematerial.app.feature.analysis.presentation.AnalysisRoute
-import com.rematerial.app.feature.analysis.presentation.UserPlaceholderScreen
 import com.rematerial.app.feature.artisan.presentation.ArtisanWorkspaceRoute
 import com.rematerial.app.feature.identity.domain.Role
 import com.rematerial.app.feature.identity.presentation.IdentityEntryScreen
 import com.rematerial.app.feature.identity.presentation.IdentityEvent
 import com.rematerial.app.feature.identity.presentation.IdentityViewModel
-import com.rematerial.app.feature.identity.presentation.UpcomingWorkspaceScreen
 import com.rematerial.app.feature.production.domain.ProductDraft
 import com.rematerial.app.feature.production.presentation.ProductionRoute
 import com.rematerial.app.feature.production.presentation.ProductionViewModel
@@ -83,10 +81,10 @@ private fun ReMaterialNavHost() {
                 onDestinationSelected = { destination ->
                     when (destination) {
                         DockDestination.Beranda -> Unit
-                        DockDestination.Scan -> navController.navigate(Routes.Analysis)
-                        DockDestination.Produksi -> navController.navigate(Routes.Production)
-                        DockDestination.Pasar -> navController.navigate(Routes.Market)
-                        DockDestination.Akun -> navController.navigate(Routes.Account)
+                        DockDestination.Scan -> navController.navigateUserDestination(Routes.Analysis)
+                        DockDestination.Produksi -> navController.navigateUserDestination(Routes.Production)
+                        DockDestination.Pasar -> navController.navigateUserDestination(Routes.Market)
+                        DockDestination.Akun -> navController.navigateUserDestination(Routes.Account)
                     }
                 },
             )
@@ -112,11 +110,11 @@ private fun ReMaterialNavHost() {
                 onBack = { navController.popBackStack() },
                 onDestinationSelected = { destination ->
                     when (destination) {
-                        DockDestination.Beranda -> navController.popBackStack()
-                        DockDestination.Scan -> navController.navigate(Routes.Analysis)
+                        DockDestination.Beranda -> navController.navigateUserDestination(Routes.UserHome)
+                        DockDestination.Scan -> navController.navigateUserDestination(Routes.Analysis)
                         DockDestination.Produksi -> Unit
-                        DockDestination.Pasar -> navController.navigate(Routes.Market)
-                        DockDestination.Akun -> navController.navigate(Routes.Account)
+                        DockDestination.Pasar -> navController.navigateUserDestination(Routes.Market)
+                        DockDestination.Akun -> navController.navigateUserDestination(Routes.Account)
                     }
                 },
             )
@@ -124,11 +122,11 @@ private fun ReMaterialNavHost() {
         composable(Routes.Market) {
             MarketplaceRoute(onDestinationSelected = { destination ->
                 when (destination) {
-                    DockDestination.Beranda -> navController.navigate(Routes.UserHome)
-                    DockDestination.Scan -> navController.navigate(Routes.Analysis)
-                    DockDestination.Produksi -> navController.navigate(Routes.Production)
+                    DockDestination.Beranda -> navController.navigateUserDestination(Routes.UserHome)
+                    DockDestination.Scan -> navController.navigateUserDestination(Routes.Analysis)
+                    DockDestination.Produksi -> navController.navigateUserDestination(Routes.Production)
                     DockDestination.Pasar -> Unit
-                    DockDestination.Akun -> navController.navigate(Routes.Account)
+                    DockDestination.Akun -> navController.navigateUserDestination(Routes.Account)
                 }
             })
         }
@@ -138,6 +136,15 @@ private fun ReMaterialNavHost() {
                 onAnalysis = { navController.navigate(Routes.Analysis) },
                 onProduction = { navController.navigate(Routes.Production) },
                 onOrders = { navController.navigate(Routes.Orders) },
+                onDestinationSelected = { destination ->
+                    when (destination) {
+                        DockDestination.Beranda -> navController.navigateUserDestination(Routes.UserHome)
+                        DockDestination.Scan -> navController.navigateUserDestination(Routes.Analysis)
+                        DockDestination.Produksi -> navController.navigateUserDestination(Routes.Production)
+                        DockDestination.Pasar -> navController.navigateUserDestination(Routes.Market)
+                        DockDestination.Akun -> Unit
+                    }
+                },
                 onLogout = { returnToIdentity(navController, identityViewModel) },
             )
         }
@@ -147,11 +154,11 @@ private fun ReMaterialNavHost() {
                 onBack = { navController.popBackStack() },
                 onDestinationSelected = { destination ->
                     when (destination) {
-                        DockDestination.Beranda -> navController.popBackStack()
-                        DockDestination.Scan -> navController.navigate(Routes.Analysis)
-                        DockDestination.Produksi -> navController.navigate(Routes.Production)
-                        DockDestination.Pasar -> navController.navigate(Routes.Market)
-                        DockDestination.Akun -> navController.navigate(Routes.Account)
+                        DockDestination.Beranda -> navController.navigateUserDestination(Routes.UserHome)
+                        DockDestination.Scan -> navController.navigateUserDestination(Routes.Analysis)
+                        DockDestination.Produksi -> navController.navigateUserDestination(Routes.Production)
+                        DockDestination.Pasar -> navController.navigateUserDestination(Routes.Market)
+                        DockDestination.Akun -> navController.navigateUserDestination(Routes.Account)
                     }
                 },
             )
@@ -174,4 +181,12 @@ private fun Role.route(): String = when (this) {
 private fun returnToIdentity(navController: NavHostController, viewModel: IdentityViewModel) {
     viewModel.onEvent(IdentityEvent.SignOut)
     navController.navigate(Routes.Identity) { popUpTo(0) }
+}
+
+private fun NavHostController.navigateUserDestination(route: String) {
+    navigate(route) {
+        popUpTo(Routes.UserHome) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 }

@@ -72,12 +72,13 @@ class IdentityViewModel @Inject constructor(
             _state.update { it.copy(errorMessage = validation) }
             return
         }
+        val role = current.role ?: return
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             val result = if (current.isRegistering) {
                 repository.register(RegistrationRequest(current.displayName.trim(), current.email.trim(), current.password))
             } else {
-                repository.login(LoginRequest(current.email.trim(), current.password, current.role!!))
+                repository.login(LoginRequest(current.email.trim(), current.password, role))
             }
             _state.update { it.copy(isLoading = false) }
             when (result) {

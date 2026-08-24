@@ -30,6 +30,10 @@ class MockSellerRepository @Inject constructor() : SellerRepository {
     override val profile: StateFlow<SellerProfile> = _profile.asStateFlow()
     override fun saveListing(listing: SellerListing): SellerListing { _listings.value = if (_listings.value.any { it.id == listing.id }) _listings.value.map { if (it.id == listing.id) listing else it } else _listings.value + listing; return listing }
     override fun toggleListing(id: String, published: Boolean) { _listings.value = _listings.value.map { if (it.id == id) it.copy(published = published) else it } }
-    override fun transitionOrder(id: String, status: OrderStatus) { _orders.value = _orders.value.map { if (it.id == id) it.copy(status = status) else it } }
+    override fun transitionOrder(id: String, status: OrderStatus) {
+        _orders.value = _orders.value.map { order ->
+            if (order.id == id && status.ordinal == order.status.ordinal + 1) order.copy(status = status) else order
+        }
+    }
     override fun saveProfile(profile: SellerProfile) { _profile.value = profile }
 }

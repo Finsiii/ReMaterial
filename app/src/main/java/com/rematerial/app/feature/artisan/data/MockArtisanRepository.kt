@@ -24,6 +24,14 @@ class MockArtisanRepository : ArtisanRepository {
 
     override suspend fun updateJob(id: String, status: ArtisanJobStatus): Result<ArtisanJob> {
         val job = jobs.value.firstOrNull { it.id == id } ?: return Result.Failure(DomainFailure.Unavailable)
+        val allowed = when (job.status) {
+            ArtisanJobStatus.NEW -> status == ArtisanJobStatus.ACCEPTED || status == ArtisanJobStatus.REVISION
+            ArtisanJobStatus.ACCEPTED -> status == ArtisanJobStatus.PROCESSING || status == ArtisanJobStatus.REVISION
+            ArtisanJobStatus.REVISION -> status == ArtisanJobStatus.ACCEPTED
+            ArtisanJobStatus.PROCESSING -> status == ArtisanJobStatus.COMPLETED || status == ArtisanJobStatus.REVISION
+            ArtisanJobStatus.COMPLETED -> false
+        }
+        if (!allowed) return Result.Failure(DomainFailure.Validation(listOf("Status pekerjaan harus berurutan.")))
         val updated = job.copy(status = status)
         jobs.value = jobs.value.map { if (it.id == id) updated else it }
         return Result.Success(updated)

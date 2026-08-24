@@ -54,6 +54,11 @@ import com.rematerial.app.feature.artisan.domain.ArtisanProfileDraft
 import com.rematerial.app.feature.artisan.domain.ProfileSubmissionState
 
 private enum class ArtisanPage { HOME, JOB, PROFILE, SETTINGS }
+private enum class ArtisanTab(val label: String, val icon: Int) {
+    HOME("Beranda", RematerialIcons.Hammer),
+    PROFILE("Profil", RematerialIcons.UserRound),
+    SETTINGS("Akun", RematerialIcons.Settings),
+}
 
 @Composable
 fun ArtisanWorkspaceRoute(
@@ -69,6 +74,38 @@ fun ArtisanWorkspaceRoute(
         ArtisanPage.PROFILE -> ArtisanProfileScreen(state.profile, { pageName = ArtisanPage.HOME.name }, viewModel::updateProfile)
         ArtisanPage.SETTINGS -> ArtisanSettingsScreen(state.profile, { pageName = ArtisanPage.HOME.name }, { pageName = ArtisanPage.PROFILE.name }, onLogout)
     }
+    if (page != ArtisanPage.JOB) {
+        ArtisanDock(page) { target -> pageName = target.name }
+    }
+}
+
+@Composable
+private fun ArtisanDock(page: ArtisanPage, onSelect: (ArtisanPage) -> Unit) {
+    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = bottom + 12.dp),
+            color = RematerialColors.Surface,
+            shape = RoundedCornerShape(22.dp),
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, RematerialColors.Line),
+        ) {
+            Row(Modifier.fillMaxWidth().height(70.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+                ArtisanTab.entries.forEach { tab ->
+                    val target = when (tab) {
+                        ArtisanTab.HOME -> ArtisanPage.HOME
+                        ArtisanTab.PROFILE -> ArtisanPage.PROFILE
+                        ArtisanTab.SETTINGS -> ArtisanPage.SETTINGS
+                    }
+                    Column(Modifier.width(80.dp).clickable(role = Role.Tab) { onSelect(target) }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        RematerialIcon(tab.icon, tab.label, Modifier.size(20.dp), if (page == target) RematerialColors.DeepForest else RematerialColors.Muted)
+                        Spacer(Modifier.height(4.dp))
+                        Text(tab.label, style = MaterialTheme.typography.labelSmall, color = if (page == target) RematerialColors.DeepForest else RematerialColors.Muted)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -79,7 +116,7 @@ private fun ArtisanHomeScreen(
     onSettings: () -> Unit,
 ) {
     val current = jobs.firstOrNull { it.status == ArtisanJobStatus.PROCESSING } ?: jobs.firstOrNull()
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
         RematerialTopBar("Ruang Pengrajin", actionIcon = RematerialIcons.UserRound, actionDescription = "Profil pengrajin", onAction = onProfile)
         Spacer(Modifier.height(18.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Selamat datang, Bima.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Kerjakan yang paling penting.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink) }; RematerialIcon(RematerialIcons.Bell, "Notifikasi", Modifier.size(22.dp), RematerialColors.DeepForest) }
         Spacer(Modifier.height(24.dp)); Text("Pekerjaan utama", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(10.dp))
@@ -127,7 +164,13 @@ private fun JobDetailSection(title: String, body: String) { Column(Modifier.padd
 
 @Composable
 private fun JobAction(label: String, target: ArtisanJobStatus, current: ArtisanJobStatus, onTransition: (ArtisanJobStatus) -> Unit) {
-    val enabled = target != current && !(current == ArtisanJobStatus.COMPLETED)
+    val enabled = when (current) {
+        ArtisanJobStatus.NEW -> target == ArtisanJobStatus.ACCEPTED || target == ArtisanJobStatus.REVISION
+        ArtisanJobStatus.ACCEPTED -> target == ArtisanJobStatus.PROCESSING || target == ArtisanJobStatus.REVISION
+        ArtisanJobStatus.REVISION -> target == ArtisanJobStatus.ACCEPTED
+        ArtisanJobStatus.PROCESSING -> target == ArtisanJobStatus.COMPLETED || target == ArtisanJobStatus.REVISION
+        ArtisanJobStatus.COMPLETED -> false
+    }
     RematerialButton(label, { onTransition(target) }, Modifier.fillMaxWidth().padding(vertical = 4.dp), enabled = enabled, leadingIcon = if (target == ArtisanJobStatus.REVISION) RematerialIcons.ArrowLeft else RematerialIcons.ArrowRight)
 }
 
@@ -137,7 +180,7 @@ private fun ArtisanProfileScreen(profile: ArtisanProfileDraft, onBack: () -> Uni
     val ktpPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { draft = draft.copy(ktpUri = it.toString(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) } }
     val selfiePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { draft = draft.copy(selfieUri = it.toString(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) } }
     val portfolioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) draft = draft.copy(portfolioUris = (draft.portfolioUris + uris.map { it.toString() }).distinct(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
         RematerialTopBar("Profil pengrajin", onBack = onBack)
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item { Spacer(Modifier.height(16.dp)); Text("Lengkapi ruang kerjamu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Data ini hanya demo lokal untuk menyiapkan alur verifikasi pengrajin.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); RematerialField(draft.name, { draft = draft.copy(name = it) }, "Nama tampilan"); Spacer(Modifier.height(16.dp)); RematerialField(draft.nik, { draft = draft.copy(nik = it, submissionState = ProfileSubmissionState.NOT_SUBMITTED) }, "NIK", placeholder = "Masukkan 16 digit NIK", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)); Spacer(Modifier.height(18.dp)); PickerRow("Foto KTP", if (draft.ktpUri == null) "Belum dipilih" else "Foto demo terpilih", { ktpPicker.launch("image/*") }); PickerRow("Foto selfie", if (draft.selfieUri == null) "Belum dipilih" else "Foto demo terpilih", { selfiePicker.launch("image/*") }); PickerRow("Portofolio karya", if (draft.portfolioUris.isEmpty()) "Belum ada foto" else "${draft.portfolioUris.size} foto demo terpilih", { portfolioPicker.launch("image/*") }); Spacer(Modifier.height(12.dp)); Text("Status: ${draft.submissionState.label}", style = MaterialTheme.typography.bodyMedium, color = if (draft.submissionState == ProfileSubmissionState.NEEDS_CORRECTION) androidx.compose.ui.graphics.Color(0xFF9B3F2F) else RematerialColors.DeepForest); if (draft.submissionState == ProfileSubmissionState.NEEDS_CORRECTION) { Spacer(Modifier.height(6.dp)); Text("Foto KTP perlu lebih terang. Perbarui pilihan lalu kirim kembali.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; if (draft.submissionState == ProfileSubmissionState.SUBMITTED) { Spacer(Modifier.height(10.dp)); Text("Simulasikan koreksi untuk demo", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable { draft = draft.copy(submissionState = ProfileSubmissionState.NEEDS_CORRECTION); onSave(draft) }.padding(vertical = 8.dp)) }; Spacer(Modifier.height(20.dp)); RematerialButton("Kirim untuk ditinjau", { draft = draft.copy(submissionState = ProfileSubmissionState.SUBMITTED); onSave(draft) }, Modifier.fillMaxWidth(), enabled = draft.nik.length == 16 && draft.ktpUri != null && draft.selfieUri != null, leadingIcon = RematerialIcons.Upload) }
@@ -152,7 +195,7 @@ private fun PickerRow(title: String, supporting: String, onClick: () -> Unit) {
 
 @Composable
 private fun ArtisanSettingsScreen(profile: ArtisanProfileDraft, onBack: () -> Unit, onProfile: () -> Unit, onLogout: () -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Pengaturan", onBack = onBack); Spacer(Modifier.height(24.dp)); Text(profile.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("artisan@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); SettingsRow("Profil dan verifikasi", "NIK, dokumen demo, dan portofolio", onProfile); SettingsRow("Preferensi pesanan", "Area layanan dan kapasitas produksi", {}); SettingsRow("Bantuan", "Panduan menerima dan menyelesaikan pekerjaan", {}); Spacer(Modifier.height(30.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) { RematerialTopBar("Pengaturan", onBack = onBack); Spacer(Modifier.height(24.dp)); Text(profile.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("artisan@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); SettingsRow("Profil dan verifikasi", "NIK, dokumen demo, dan portofolio", onProfile); Spacer(Modifier.height(30.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
 }
 
 @Composable
