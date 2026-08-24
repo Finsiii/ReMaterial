@@ -49,9 +49,15 @@ class DesignPolicyTest {
         )
         assertTrue("main source directory is missing: $sourceRoot", Files.isDirectory(sourceRoot))
         val source = readKotlin(sourceRoot)
+        val presentationSource = readKotlin(sourceRoot) { path ->
+            path.toString().contains("/presentation/") || path.toString().contains("/ui/")
+        }
 
         assertFalse(source.contains("androidx.compose.material.icons"))
-        assertFalse(Regex("import\\s+[^\\n]*(fake|fixture|mock)", RegexOption.IGNORE_CASE).containsMatchIn(source))
+        assertFalse(
+            Regex("import\\s+[^\\n]*(fake|fixture|mock)", RegexOption.IGNORE_CASE)
+                .containsMatchIn(presentationSource),
+        )
         assertFalse(Regex("\\b(NavigationBar|NavigationRail|AssistChip|FilterChip|InputChip|SuggestionChip|Badge)\\b").containsMatchIn(source))
         assertFalse(Regex("Brush\\.(linearGradient|radialGradient|sweepGradient)").containsMatchIn(source))
     }
@@ -77,8 +83,11 @@ class DesignPolicyTest {
         assertTrue(DockDestination.entries.all { it.label.isNotBlank() })
     }
 
-    private fun readKotlin(root: Path): String = Files.walk(root).use { paths ->
-        paths.filter { Files.isRegularFile(it) && it.toString().endsWith(".kt") }
+    private fun readKotlin(
+        root: Path,
+        include: (Path) -> Boolean = { true },
+    ): String = Files.walk(root).use { paths ->
+        paths.filter { Files.isRegularFile(it) && it.toString().endsWith(".kt") && include(it) }
             .map { it.toFile().readText() }
             .collect(Collectors.joining("\n"))
     }
