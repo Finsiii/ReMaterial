@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 @Singleton
 class MockMarketplaceRepository @Inject constructor() : MarketplaceRepository {
+    private var nextOrderNumber = 19
     private val nusa = MarketplaceSeller("seller-nusa", "Nusa Forma", "Bandung", "Studio kecil yang mengolah sisa material menjadi benda sehari-hari yang tahan lama.")
     private val serat = MarketplaceSeller("seller-serat", "Serat Selatan", "Yogyakarta", "Kolektif tekstil yang menghidupkan kembali potongan kain lokal.")
     private val _products = MutableStateFlow(
@@ -54,7 +55,7 @@ class MockMarketplaceRepository @Inject constructor() : MarketplaceRepository {
     override fun placeOrder(checkout: CheckoutDraft): MarketplaceOrder? {
         val lines = _cart.value
         if (lines.isEmpty()) return null
-        val order = MarketplaceOrder("RM-${System.currentTimeMillis().toString().takeLast(6)}", lines, lines.sumOf { it.product.price * it.quantity }, checkout.address, checkout.delivery, checkout.payment, OrderStatus.PLACED, "Hari ini")
+        val order = MarketplaceOrder("RM-2408-${nextOrderNumber++}", lines, lines.sumOf { it.product.price * it.quantity }, checkout.address, checkout.delivery, checkout.payment, OrderStatus.PLACED, "Hari ini")
         _orders.value = listOf(order) + _orders.value
         _cart.value = emptyList()
         return order
