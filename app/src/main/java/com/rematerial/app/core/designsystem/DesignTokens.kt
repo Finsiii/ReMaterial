@@ -76,4 +76,10 @@ object RematerialIcons {
     val Search = R.drawable.lucide_ic_search
     val History = R.drawable.lucide_ic_history
     val Upload = R.drawable.lucide_ic_upload
+    val ArrowRight = R.drawable.lucide_ic_arrow_right
+    val Eye = R.drawable.lucide_ic_eye
+    val EyeOff = R.drawable.lucide_ic_eye_off
+    val Hammer = R.drawable.lucide_ic_hammer
+    val Store = R.drawable.lucide_ic_store
+    val UserRound = R.drawable.lucide_ic_user_round
 }

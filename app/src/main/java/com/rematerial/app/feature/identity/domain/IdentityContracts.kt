@@ -19,6 +19,13 @@ data class LoginRequest(
 )
 
 @Serializable
+data class RegistrationRequest(
+    val displayName: String,
+    val email: String,
+    val password: String,
+)
+
+@Serializable
 data class Session(
     val accountId: AccountId,
     val email: String,
@@ -29,5 +36,6 @@ data class Session(
 
 interface IdentityRepository {
     suspend fun login(request: LoginRequest): Result<Session>
+    suspend fun register(request: RegistrationRequest): Result<Session>
     suspend fun logout(): Result<Unit>
 }

@@ -4,7 +4,7 @@ import com.rematerial.app.feature.analysis.data.AnalysisFixtures
 import com.rematerial.app.feature.analysis.data.MockAiAnalysisGateway
 import com.rematerial.app.feature.analysis.domain.AiAnalysisGateway
 import com.rematerial.app.feature.analysis.domain.AnalysisValidator
-import com.rematerial.app.feature.identity.data.FakeIdentityRepository
+import com.rematerial.app.feature.identity.data.DemoIdentityRepository
 import com.rematerial.app.feature.identity.domain.IdentityRepository
 import com.rematerial.app.feature.identity.domain.LoginRequest
 import com.rematerial.app.feature.identity.domain.Role
@@ -33,7 +33,7 @@ import org.junit.Test
 class DomainContractsTest {
     @Test
     fun `seeded user has immutable USER role`() = runTest {
-        val repository: IdentityRepository = FakeIdentityRepository()
+        val repository: IdentityRepository = DemoIdentityRepository()
         val result = repository.login(LoginRequest("user@rematerial.demo", "Demo123!", Role.USER))
         assertTrue(result is Result.Success)
         assertEquals(Role.USER, (result as Result.Success).value.role)
@@ -41,7 +41,7 @@ class DomainContractsTest {
 
     @Test
     fun `wrong role cannot use seeded user`() = runTest {
-        val result = FakeIdentityRepository().login(
+        val result = DemoIdentityRepository().login(
             LoginRequest("user@rematerial.demo", "Demo123!", Role.ARTISAN),
         )
         assertTrue(result is Result.Failure)
