@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,6 +68,8 @@ private fun ReMaterialContent() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp, vertical = 16.dp)
                 .padding(bottom = 104.dp),
         ) {
@@ -77,7 +83,7 @@ private fun ReMaterialContent() {
             Text("Selamat datang, Dika", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Bahan ini akan\nmenjadi apa?",
+                "Bahan ini bisa\njadi apa?",
                 style = MaterialTheme.typography.displayLarge,
                 color = RematerialColors.Ink,
             )
@@ -96,9 +102,11 @@ private fun ReMaterialContent() {
                         else -> R.drawable.material_textile
                     }
                     Surface(
-                        modifier = Modifier.size(width = 124.dp, height = 156.dp),
+                        modifier = Modifier
+                            .size(width = 124.dp, height = 156.dp)
+                            .clickable(onClick = {}),
                         color = RematerialColors.Surface,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                     ) {
                         Column {
                             Image(
@@ -107,7 +115,7 @@ private fun ReMaterialContent() {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(112.dp)
-                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                                    .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)),
                                 contentScale = ContentScale.Crop,
                             )
                             Text(
@@ -121,7 +129,7 @@ private fun ReMaterialContent() {
             }
             Spacer(Modifier.height(20.dp))
             RematerialButton(
-                text = "Analisis bahan",
+                text = "Analisis Material",
                 onClick = {},
                 leadingIcon = RematerialIcons.Camera,
                 modifier = Modifier.fillMaxWidth(),
@@ -131,7 +139,7 @@ private fun ReMaterialContent() {
             RematerialListRow(
                 title = "Kabel tembaga",
                 supportingText = "Dianalisis hari ini · 2,45 kg",
-                leadingIcon = RematerialIcons.Sparkles,
+                leadingIcon = RematerialIcons.History,
                 onClick = {},
             )
         }

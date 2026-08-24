@@ -3,7 +3,6 @@ package com.rematerial.app.core.designsystem
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
@@ -25,19 +26,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
@@ -72,12 +70,12 @@ fun RematerialButton(
     Surface(
         modifier = modifier
             .height(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = text },
         color = background,
         contentColor = foreground,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -108,7 +106,9 @@ fun RematerialField(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = RematerialColors.Muted,
-            modifier = Modifier.padding(bottom = 8.dp),
+            modifier = Modifier
+                .padding(bottom = 8.dp)
+                .semantics { contentDescription = "Label $label" },
         )
         BasicTextField(
             value = value,
@@ -122,12 +122,15 @@ fun RematerialField(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(RematerialColors.Surface)
+                .semantics { contentDescription = label }
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             decorationBox = { innerTextField ->
-                if (value.isEmpty() && placeholder != null) {
-                    Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (value.isEmpty() && placeholder != null) {
+                        Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+                    }
+                    innerTextField()
                 }
-                innerTextField()
             },
         )
     }
@@ -183,8 +186,8 @@ fun RematerialTopBar(
 @Composable
 fun RematerialListRow(
     title: String,
-    supportingText: String? = null,
     modifier: Modifier = Modifier,
+    supportingText: String? = null,
     leadingIcon: Int? = null,
     trailingIcon: Int? = RematerialIcons.ChevronRight,
     onClick: (() -> Unit)? = null,
@@ -216,7 +219,11 @@ fun RematerialProgress(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .semantics { contentDescription = "Kemajuan ${(progress.coerceIn(0f, 1f) * 100).toInt()} persen" },
+            .semantics {
+                val safeProgress = progress.coerceIn(0f, 1f)
+                contentDescription = "Kemajuan ${(safeProgress * 100).toInt()} persen"
+                progressBarRangeInfo = ProgressBarRangeInfo(safeProgress, 0f..1f)
+            },
     ) {
         val fraction = progress.coerceIn(0f, 1f)
         drawRoundRect(RematerialColors.Line, cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f))
@@ -234,51 +241,82 @@ fun RematerialDock(
     onDestinationSelected: (DockDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        color = RematerialColors.Surface,
-        shape = RoundedCornerShape(24.dp),
-        shadowElevation = 8.dp,
-        tonalElevation = 0.dp,
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(68.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly,
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = RematerialColors.Surface,
+            shape = RoundedCornerShape(20.dp),
+            shadowElevation = 8.dp,
+            tonalElevation = 0.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, RematerialColors.Line),
         ) {
-            DockDestination.entries.forEach { destination ->
-                val active = selected == destination
-                val iconSize = if (destination.isPrimary) 25.dp else 20.dp
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(68.dp)
-                        .clickable(role = Role.Tab, onClick = { onDestinationSelected(destination) })
-                        .semantics { contentDescription = destination.label },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    RematerialIcon(
-                        icon = destination.icon,
-                        contentDescription = destination.label,
-                        modifier = Modifier.size(iconSize),
-                        tint = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        destination.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Box(
+            Row(
+                modifier = Modifier.fillMaxWidth().height(58.dp).selectableGroup(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                DockDestination.entries.forEach { destination ->
+                    val active = selected == destination
+                    Column(
                         modifier = Modifier
-                            .size(width = if (active) 18.dp else 0.dp, height = 2.dp)
-                            .background(RematerialColors.Bronze),
-                    )
+                            .weight(1f)
+                            .height(58.dp)
+                            .selectable(
+                                selected = active,
+                                role = Role.Tab,
+                                onClick = { onDestinationSelected(destination) },
+                            )
+                            .semantics { contentDescription = destination.label },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        if (destination.isPrimary) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(RematerialColors.DeepForest),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                RematerialIcon(
+                                    icon = destination.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(25.dp),
+                                    tint = RematerialColors.Surface,
+                                )
+                            }
+                            Text(
+                                destination.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
+                            )
+                        } else {
+                            RematerialIcon(
+                                icon = destination.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                destination.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (active) RematerialColors.DeepForest else RematerialColors.Muted,
+                            )
+                        }
+                        Spacer(Modifier.height(if (destination.isPrimary) 2.dp else 4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(width = if (active) 18.dp else 0.dp, height = 2.dp)
+                                .background(RematerialColors.Bronze),
+                        )
+                    }
                 }
             }
         }

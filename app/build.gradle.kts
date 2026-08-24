@@ -98,3 +98,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.app.cash.turbine)
 }
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("rematerial.mainSourceDir", file("src/main/java").absolutePath)
+}

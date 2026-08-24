@@ -1,8 +1,8 @@
 <resources>
     <style name="Theme.ReMaterial" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:navigationBarColor">#E9E7E1</item>
+        <item name="android:windowBackground">#E9E7E1</item>
     </style>
 </resources>
