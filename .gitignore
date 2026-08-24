@@ -1,0 +1,59 @@
+# Local and generated configuration
+local.properties
+.env
+.env.*
+secrets/
+secret/
+*.secret
+*.credentials
+credentials.json
+*.jks
+*.keystore
+*.p12
+*.pem
+*.cer
+*.der
+*.csr
+*.mobileprovision
+*.provisionprofile
+keystore.properties
+google-services.json
+
+# Gradle and build outputs
+.gradle/
+.gradle-user-home/
+**/build/
+captures/
+
+# Sensitive user data and identity documents
+identity-documents/
+identity/
+*.ktp.*
+*.passport.*
+
+# Documentation and agent-only material are kept outside this application repository
+docs/
+.superpowers/
+.codex/
+.agents/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CODEX.md
+COPILOT.md
+*.prompt
+*.prompts
+prompt.md
+prompts.md
+instructions.md
+agent-instructions.md
+
+# IDE and operating-system files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
