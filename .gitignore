@@ -23,11 +23,11 @@ google-services.json
 .gradle/
 .gradle-user-home/
 **/build/
+.kotlin/
 captures/
 
 # Sensitive user data and identity documents
 identity-documents/
-identity/
 *.ktp.*
 *.passport.*
 

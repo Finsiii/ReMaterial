@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
 }
@@ -97,6 +98,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.app.cash.turbine)
+    testImplementation(libs.org.jetbrains.kotlinx.coroutines.test)
+    testImplementation(libs.io.ktor.client.mock)
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
