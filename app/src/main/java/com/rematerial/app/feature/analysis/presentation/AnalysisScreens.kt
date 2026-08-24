@@ -67,7 +67,7 @@ import com.rematerial.app.feature.analysis.domain.ProductOption
 @Composable
 fun AnalysisRoute(
     onClose: () -> Unit,
-    onOpenArtisan: () -> Unit,
+    onOpenArtisan: (ProductOption) -> Unit,
     viewModel: AnalysisViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -252,7 +252,7 @@ private fun UnitCode.displayName(): String = when (this) {
 }
 
 @Composable
-private fun ResultScreen(state: AnalysisUiState, onClose: () -> Unit, onOpenArtisan: () -> Unit, onSelect: (String) -> Unit, onSave: () -> Unit) {
+private fun ResultScreen(state: AnalysisUiState, onClose: () -> Unit, onOpenArtisan: (ProductOption) -> Unit, onSelect: (String) -> Unit, onSave: () -> Unit) {
     val result = state.result ?: return
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp)) {
         item { RematerialTopBar("Hasil analisis", onBack = onClose) }
@@ -264,7 +264,7 @@ private fun ResultScreen(state: AnalysisUiState, onClose: () -> Unit, onOpenArti
         item { Spacer(Modifier.height(12.dp)); Text("Pilihan produk", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)) }
         if (result.productOptions.isEmpty()) item { ResultSection("Belum ada opsi", "Lengkapi verifikasi keselamatan sebelum mencari produk yang sesuai.") }
         items(result.productOptions) { option -> ProductOptionCard(option, option.optionId.value == state.selectedOptionId, { onSelect(option.optionId.value) }) }
-        item { Spacer(Modifier.height(18.dp)); if (state.saved) Text("Tersimpan di daftar ide produksi.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.DeepForest); Spacer(Modifier.height(8.dp)); RematerialButton(if (state.saved) "Tersimpan" else "Simpan untuk dibuat sendiri", onSave, Modifier.fillMaxWidth(), enabled = !state.saved, leadingIcon = RematerialIcons.Hammer); Spacer(Modifier.height(10.dp)); RematerialButton("Buat di Pengrajin", onOpenArtisan, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Store) }
+        item { Spacer(Modifier.height(18.dp)); if (state.saved) Text("Tersimpan di daftar ide produksi.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.DeepForest); Spacer(Modifier.height(8.dp)); RematerialButton(if (state.saved) "Tersimpan" else "Simpan untuk dibuat sendiri", onSave, Modifier.fillMaxWidth(), enabled = !state.saved, leadingIcon = RematerialIcons.Hammer); Spacer(Modifier.height(10.dp)); state.result.productOptions.firstOrNull { it.optionId.value == state.selectedOptionId }?.let { selected -> RematerialButton("Buat di Pengrajin", { onOpenArtisan(selected) }, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Store) } }
     }
 }
 

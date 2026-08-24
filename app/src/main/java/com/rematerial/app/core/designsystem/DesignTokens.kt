@@ -69,6 +69,7 @@ enum class DockDestination(
 
 object RematerialIcons {
     val Back = R.drawable.lucide_ic_arrow_left
+    val ArrowLeft = R.drawable.lucide_ic_arrow_left
     val Bell = R.drawable.lucide_ic_bell
     val Camera = R.drawable.lucide_ic_camera
     val ChevronRight = R.drawable.lucide_ic_chevron_right

@@ -18,11 +18,15 @@ import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.feature.home.UserHomeScreen
 import com.rematerial.app.feature.analysis.presentation.AnalysisRoute
 import com.rematerial.app.feature.analysis.presentation.UserPlaceholderScreen
+import com.rematerial.app.feature.artisan.presentation.ArtisanWorkspaceRoute
 import com.rematerial.app.feature.identity.domain.Role
 import com.rematerial.app.feature.identity.presentation.IdentityEntryScreen
 import com.rematerial.app.feature.identity.presentation.IdentityEvent
 import com.rematerial.app.feature.identity.presentation.IdentityViewModel
 import com.rematerial.app.feature.identity.presentation.UpcomingWorkspaceScreen
+import com.rematerial.app.feature.production.domain.ProductDraft
+import com.rematerial.app.feature.production.presentation.ProductionRoute
+import com.rematerial.app.feature.production.presentation.ProductionViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 private object Routes {
@@ -32,6 +36,7 @@ private object Routes {
     const val Production = "production"
     const val Market = "market"
     const val Account = "account"
+    const val ArtisanDiscovery = "artisan-discovery"
     const val ArtisanWorkspace = "artisan-workspace"
     const val SellerWorkspace = "seller-workspace"
 }
@@ -55,6 +60,7 @@ class MainActivity : ComponentActivity() {
 private fun ReMaterialNavHost() {
     val navController = rememberNavController()
     val identityViewModel: IdentityViewModel = hiltViewModel()
+    val productionViewModel: ProductionViewModel = hiltViewModel()
     NavHost(navController = navController, startDestination = Routes.Identity) {
         composable(Routes.Identity) {
             IdentityEntryScreen(
@@ -83,14 +89,51 @@ private fun ReMaterialNavHost() {
         composable(Routes.Analysis) {
             AnalysisRoute(
                 onClose = { navController.popBackStack() },
-                onOpenArtisan = { navController.navigate(Routes.ArtisanWorkspace) },
+                onOpenArtisan = { option ->
+                    productionViewModel.saveDraft(
+                        ProductDraft(
+                            optionId = option.optionId,
+                            title = option.title,
+                            materialSummary = "Material terpilih dari analisis · minimum ${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
+                            minimumQuantity = "${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
+                        ),
+                    )
+                    navController.navigate(Routes.ArtisanDiscovery)
+                },
             )
         }
-        composable(Routes.Production) { UserPlaceholderScreen("Produksi", "Rencanakan proses pembuatan dari material yang sudah kamu simpan.", DockDestination.Produksi) { navController.popBackStack() } }
+        composable(Routes.Production) {
+            ProductionRoute(
+                onBack = { navController.popBackStack() },
+                onDestinationSelected = { destination ->
+                    when (destination) {
+                        DockDestination.Beranda -> navController.popBackStack()
+                        DockDestination.Scan -> navController.navigate(Routes.Analysis)
+                        DockDestination.Produksi -> Unit
+                        DockDestination.Pasar -> navController.navigate(Routes.Market)
+                        DockDestination.Akun -> navController.navigate(Routes.Account)
+                    }
+                },
+            )
+        }
         composable(Routes.Market) { UserPlaceholderScreen("Pasar", "Temukan produk dan inspirasi yang bisa lahir dari materialmu.", DockDestination.Pasar) { navController.popBackStack() } }
         composable(Routes.Account) { UserPlaceholderScreen("Akun", "Kelola profil, preferensi analisis, dan daftar ide produksi.", DockDestination.Akun) { navController.popBackStack() } }
+        composable(Routes.ArtisanDiscovery) {
+            ProductionRoute(
+                onBack = { navController.popBackStack() },
+                onDestinationSelected = { destination ->
+                    when (destination) {
+                        DockDestination.Beranda -> navController.popBackStack()
+                        DockDestination.Scan -> navController.navigate(Routes.Analysis)
+                        DockDestination.Produksi -> navController.navigate(Routes.Production)
+                        DockDestination.Pasar -> navController.navigate(Routes.Market)
+                        DockDestination.Akun -> navController.navigate(Routes.Account)
+                    }
+                },
+            )
+        }
         composable(Routes.ArtisanWorkspace) {
-            UpcomingWorkspaceScreen(Role.ARTISAN) { returnToIdentity(navController, identityViewModel) }
+            ArtisanWorkspaceRoute(onLogout = { returnToIdentity(navController, identityViewModel) })
         }
         composable(Routes.SellerWorkspace) {
             UpcomingWorkspaceScreen(Role.SELLER) { returnToIdentity(navController, identityViewModel) }
