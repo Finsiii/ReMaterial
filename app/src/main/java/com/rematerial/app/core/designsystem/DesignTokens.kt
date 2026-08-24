@@ -83,4 +83,24 @@ object RematerialIcons {
     val Hammer = R.drawable.lucide_ic_hammer
     val Store = R.drawable.lucide_ic_store
     val UserRound = R.drawable.lucide_ic_user_round
+    val ShoppingBag = R.drawable.lucide_ic_shopping_bag
+    val ShoppingCart = R.drawable.lucide_ic_shopping_cart
+    val Filter = R.drawable.lucide_ic_list_filter
+    val MapPin = R.drawable.lucide_ic_map_pin
+    val Truck = R.drawable.lucide_ic_truck
+    val CreditCard = R.drawable.lucide_ic_credit_card
+    val Wallet = R.drawable.lucide_ic_wallet
+    val Package = R.drawable.lucide_ic_package
+    val Check = R.drawable.lucide_ic_check
+    val X = R.drawable.lucide_ic_x
+    val Minus = R.drawable.lucide_ic_minus
+    val Pencil = R.drawable.lucide_ic_pencil
+    val Archive = R.drawable.lucide_ic_archive
+    val Pause = R.drawable.lucide_ic_pause
+    val Image = R.drawable.lucide_ic_image
+    val Settings = R.drawable.lucide_ic_settings
+    val LogOut = R.drawable.lucide_ic_log_out
+    val Receipt = R.drawable.lucide_ic_receipt
+    val CircleCheck = R.drawable.lucide_ic_circle_check
+    val Circle = R.drawable.lucide_ic_circle
 }

@@ -27,6 +27,10 @@ import com.rematerial.app.feature.identity.presentation.UpcomingWorkspaceScreen
 import com.rematerial.app.feature.production.domain.ProductDraft
 import com.rematerial.app.feature.production.presentation.ProductionRoute
 import com.rematerial.app.feature.production.presentation.ProductionViewModel
+import com.rematerial.app.feature.marketplace.presentation.MarketplaceRoute
+import com.rematerial.app.feature.marketplace.presentation.MarketplaceOrdersRoute
+import com.rematerial.app.feature.marketplace.presentation.UserAccountRoute
+import com.rematerial.app.feature.seller.presentation.SellerWorkspaceRoute
 import dagger.hilt.android.AndroidEntryPoint
 
 private object Routes {
@@ -36,6 +40,7 @@ private object Routes {
     const val Production = "production"
     const val Market = "market"
     const val Account = "account"
+    const val Orders = "orders"
     const val ArtisanDiscovery = "artisan-discovery"
     const val ArtisanWorkspace = "artisan-workspace"
     const val SellerWorkspace = "seller-workspace"
@@ -116,8 +121,27 @@ private fun ReMaterialNavHost() {
                 },
             )
         }
-        composable(Routes.Market) { UserPlaceholderScreen("Pasar", "Temukan produk dan inspirasi yang bisa lahir dari materialmu.", DockDestination.Pasar) { navController.popBackStack() } }
-        composable(Routes.Account) { UserPlaceholderScreen("Akun", "Kelola profil, preferensi analisis, dan daftar ide produksi.", DockDestination.Akun) { navController.popBackStack() } }
+        composable(Routes.Market) {
+            MarketplaceRoute(onDestinationSelected = { destination ->
+                when (destination) {
+                    DockDestination.Beranda -> navController.navigate(Routes.UserHome)
+                    DockDestination.Scan -> navController.navigate(Routes.Analysis)
+                    DockDestination.Produksi -> navController.navigate(Routes.Production)
+                    DockDestination.Pasar -> Unit
+                    DockDestination.Akun -> navController.navigate(Routes.Account)
+                }
+            })
+        }
+        composable(Routes.Account) {
+            UserAccountRoute(
+                onBack = { navController.popBackStack() },
+                onAnalysis = { navController.navigate(Routes.Analysis) },
+                onProduction = { navController.navigate(Routes.Production) },
+                onOrders = { navController.navigate(Routes.Orders) },
+                onLogout = { returnToIdentity(navController, identityViewModel) },
+            )
+        }
+        composable(Routes.Orders) { MarketplaceOrdersRoute(onBack = { navController.popBackStack() }) }
         composable(Routes.ArtisanDiscovery) {
             ProductionRoute(
                 onBack = { navController.popBackStack() },
@@ -136,7 +160,7 @@ private fun ReMaterialNavHost() {
             ArtisanWorkspaceRoute(onLogout = { returnToIdentity(navController, identityViewModel) })
         }
         composable(Routes.SellerWorkspace) {
-            UpcomingWorkspaceScreen(Role.SELLER) { returnToIdentity(navController, identityViewModel) }
+            SellerWorkspaceRoute(onLogout = { returnToIdentity(navController, identityViewModel) })
         }
     }
 }
