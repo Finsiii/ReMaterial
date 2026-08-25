@@ -105,4 +105,32 @@ class ProductionViewModel @Inject constructor(
     fun openHistory() { _state.update { it.copy(page = ProductionPage.HISTORY) } }
     fun openRequest(request: ProductionRequest) { _state.update { it.copy(submitted = request, page = ProductionPage.REQUEST) } }
     fun backToDiscovery() { _state.update { it.copy(page = ProductionPage.DISCOVERY, selectedArtisan = null, error = null) } }
+    fun back(): Boolean {
+        val target = productionBackTarget(_state.value.page) ?: return false
+        _state.update {
+            it.copy(
+                page = target,
+                selectedArtisan = if (target == ProductionPage.DISCOVERY) null else it.selectedArtisan,
+                error = null,
+            )
+        }
+        return true
+    }
+    fun normalizePage() {
+        _state.update {
+            when {
+                it.page in setOf(ProductionPage.DETAIL, ProductionPage.FORM) && it.selectedArtisan == null -> it.copy(page = ProductionPage.DISCOVERY)
+                it.page == ProductionPage.CONFIRMED && it.submitted == null -> it.copy(page = ProductionPage.DISCOVERY)
+                it.page == ProductionPage.REQUEST && it.submitted == null -> it.copy(page = ProductionPage.HISTORY)
+                else -> it
+            }
+        }
+    }
+}
+
+internal fun productionBackTarget(page: ProductionPage): ProductionPage? = when (page) {
+    ProductionPage.DISCOVERY -> null
+    ProductionPage.DETAIL, ProductionPage.CONFIRMED, ProductionPage.HISTORY -> ProductionPage.DISCOVERY
+    ProductionPage.FORM -> ProductionPage.DETAIL
+    ProductionPage.REQUEST -> ProductionPage.HISTORY
 }

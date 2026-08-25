@@ -25,6 +25,6 @@ class AnalysisPresentationTest {
     fun userFacingLabelsDoNotExposeApiVocabulary() {
         assertEquals("Masih bagus", AnalysisPresentation.choice("good"))
         assertEquals("Sedikit", AnalysisPresentation.choice("low"))
-        assertEquals("Bisa mulai dengan aman", AnalysisPresentation.safetyTitle(com.rematerial.app.core.model.SafetyOutcome.ALLOW))
+        assertEquals("Bisa dipertimbangkan untuk tahap awal", AnalysisPresentation.safetyTitle(com.rematerial.app.core.model.SafetyOutcome.ALLOW))
     }
 }

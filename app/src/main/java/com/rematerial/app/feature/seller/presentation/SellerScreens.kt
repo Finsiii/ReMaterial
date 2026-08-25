@@ -1,5 +1,6 @@
 package com.rematerial.app.feature.seller.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -23,13 +24,19 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +63,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
+import com.rematerial.app.core.designsystem.HorizontalPageMotion
 import com.rematerial.app.core.designsystem.RematerialDockMetrics
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
@@ -72,16 +81,29 @@ private enum class SellerTab(val label: String, val icon: Int) { HOME("Beranda",
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hiltViewModel()) {
-    val state by viewModel.state.collectAsStateWithLifecycle(); var pageName by rememberSaveable { mutableStateOf(SellerPage.HOME.name) }; val page = SellerPage.valueOf(pageName); val go = { value: SellerPage -> pageName = value.name }
-    Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
+    val state by viewModel.state.collectAsStateWithLifecycle(); var pageName by rememberSaveable { mutableStateOf(SellerPage.HOME.name) }; var motionName by rememberSaveable { mutableStateOf(HorizontalPageMotion.FORWARD.name) }; val page = SellerPage.valueOf(pageName); val motion = HorizontalPageMotion.valueOf(motionName); val go = { value: SellerPage -> motionName = if (sellerIsBackward(page, value)) HorizontalPageMotion.BACKWARD.name else HorizontalPageMotion.FORWARD.name; pageName = value.name }
+    BackHandler(enabled = page != SellerPage.HOME) {
+        if (page == SellerPage.FORM || page == SellerPage.LISTING) viewModel.selectListing(null)
+        if (page == SellerPage.ORDER) viewModel.selectOrder(null)
+        go(sellerParent(page))
+    }
+    LaunchedEffect(page, state.selectedListing, state.selectedOrder) {
+        when {
+            page == SellerPage.LISTING && state.selectedListing == null -> go(SellerPage.PRODUCTS)
+            page == SellerPage.ORDER && state.selectedOrder == null -> go(SellerPage.ORDERS)
+            page != SellerPage.LISTING && page != SellerPage.FORM && state.selectedListing != null -> viewModel.selectListing(null)
+            page != SellerPage.ORDER && state.selectedOrder != null -> viewModel.selectOrder(null)
+        }
+    }
+    Box(Modifier.fillMaxSize().background(RematerialColors.Canvas).imePadding()) {
         AnimatedContent(
+            modifier = if (sellerNeedsRootInset(page)) Modifier.fillMaxSize().navigationBarsPadding() else Modifier.fillMaxSize(),
             targetState = page,
             transitionSpec = {
-                val forward = targetState.ordinal >= initialState.ordinal
-                if (forward) {
-                    slideInHorizontally(tween(280)) { it } togetherWith slideOutHorizontally(tween(280)) { -it }
+                if (motion == HorizontalPageMotion.FORWARD) {
+                    slideInHorizontally(tween(210)) { it } togetherWith slideOutHorizontally(tween(210)) { -it }
                 } else {
-                    slideInHorizontally(tween(280)) { -it } togetherWith slideOutHorizontally(tween(280)) { it }
+                    slideInHorizontally(tween(210)) { -it } togetherWith slideOutHorizontally(tween(210)) { it }
                 }
             },
             label = "seller-page-transition",
@@ -89,30 +111,36 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
             when (currentPage) {
                 SellerPage.HOME -> SellerDashboard(state, { go(SellerPage.ORDERS) }, { go(SellerPage.PRODUCTS) }, { go(SellerPage.ACCOUNT) })
                 SellerPage.PRODUCTS -> SellerProductsScreen(state.listings, { go(SellerPage.HOME) }, { viewModel.selectListing(it); go(SellerPage.LISTING) }, { viewModel.selectListing(null); go(SellerPage.FORM) })
-                SellerPage.FORM -> SellerListingForm(state.selectedListing, { go(SellerPage.PRODUCTS) }, { viewModel.saveListing(it); go(SellerPage.PRODUCTS) })
-                SellerPage.LISTING -> state.selectedListing?.let { SellerListingDetail(it, { go(SellerPage.PRODUCTS) }, { viewModel.toggleListing(it.id, !it.published); go(SellerPage.PRODUCTS) }, { go(SellerPage.FORM) }) } ?: go(SellerPage.PRODUCTS)
+                SellerPage.FORM -> SellerListingForm(state.selectedListing, { viewModel.selectListing(null); go(SellerPage.PRODUCTS) }, { viewModel.saveListing(it); viewModel.selectListing(null); go(SellerPage.PRODUCTS) })
+                SellerPage.LISTING -> state.selectedListing?.let { SellerListingDetail(it, { viewModel.selectListing(null); go(SellerPage.PRODUCTS) }, { viewModel.toggleListing(it.id, !it.published); viewModel.selectListing(null); go(SellerPage.PRODUCTS) }, { go(SellerPage.FORM) }) } ?: SellerProductsScreen(state.listings, { go(SellerPage.HOME) }, { viewModel.selectListing(it); go(SellerPage.LISTING) }, { viewModel.selectListing(null); go(SellerPage.FORM) })
                 SellerPage.ORDERS -> SellerOrdersScreen(state.orders, { go(SellerPage.HOME) }, { viewModel.selectOrder(it); go(SellerPage.ORDER) })
-                SellerPage.ORDER -> state.selectedOrder?.let { SellerOrderDetail(it, { go(SellerPage.ORDERS) }, { target -> viewModel.transitionOrder(it.id, target) }) } ?: go(SellerPage.ORDERS)
+                SellerPage.ORDER -> state.selectedOrder?.let { SellerOrderDetail(it, { viewModel.selectOrder(null); go(SellerPage.ORDERS) }, { target -> viewModel.transitionOrder(it.id, target) }) } ?: SellerOrdersScreen(state.orders, { go(SellerPage.HOME) }, { viewModel.selectOrder(it); go(SellerPage.ORDER) })
                 SellerPage.ACCOUNT -> SellerAccountScreen(state.profile, { go(SellerPage.HOME) }, { go(SellerPage.ONBOARDING) }, { go(SellerPage.SETTINGS) })
                 SellerPage.ONBOARDING -> SellerOnboardingScreen(state.profile, { go(SellerPage.ACCOUNT) }, viewModel::saveProfile)
                 SellerPage.SETTINGS -> SellerSettingsScreen(state.profile, { go(SellerPage.ACCOUNT) }, onLogout)
             }
         }
-        if (page == SellerPage.HOME || page == SellerPage.PRODUCTS || page == SellerPage.ORDERS || page == SellerPage.ACCOUNT) SellerDock(page, go)
+        if (sellerDockVisible(page)) SellerDock(page, go)
     }
 }
 
+private fun sellerParent(page: SellerPage): SellerPage = when (page) { SellerPage.PRODUCTS, SellerPage.ORDERS, SellerPage.ACCOUNT -> SellerPage.HOME; SellerPage.FORM, SellerPage.LISTING -> SellerPage.PRODUCTS; SellerPage.ORDER -> SellerPage.ORDERS; SellerPage.ONBOARDING, SellerPage.SETTINGS -> SellerPage.ACCOUNT; SellerPage.HOME -> SellerPage.HOME }
+private fun sellerDockVisible(page: SellerPage): Boolean = page == SellerPage.HOME || page == SellerPage.PRODUCTS || page == SellerPage.ORDERS || page == SellerPage.ACCOUNT
+private fun sellerNeedsRootInset(page: SellerPage): Boolean = page == SellerPage.ORDER || page == SellerPage.ONBOARDING || page == SellerPage.SETTINGS
+private fun sellerTabPosition(page: SellerPage): Int? = when (page) { SellerPage.HOME -> 0; SellerPage.PRODUCTS -> 1; SellerPage.ORDERS -> 2; SellerPage.ACCOUNT -> 3; else -> null }
+private fun sellerIsBackward(current: SellerPage, target: SellerPage): Boolean = if (target == sellerParent(current) && current != SellerPage.HOME) true else sellerTabPosition(current)?.let { from -> sellerTabPosition(target)?.let { it < from } } ?: false
+
 @Composable private fun SellerDock(page: SellerPage, go: (SellerPage) -> Unit) {
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(Modifier.fillMaxSize()) {
-        Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding).padding(bottom = bottom + RematerialDockMetrics.bottomGap), color = RematerialColors.Surface, shape = RoundedCornerShape(22.dp), shadowElevation = 8.dp, border = BorderStroke(1.dp, RematerialColors.Line)) {
-            Row(Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+        Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding, bottom = RematerialDockMetrics.bottomGap), color = RematerialColors.Surface, shape = RoundedCornerShape(22.dp), shadowElevation = 8.dp, border = BorderStroke(1.dp, RematerialColors.Line)) {
+            Row(Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
                 SellerTab.entries.forEach { tab ->
                     if (tab == SellerTab.ADD) {
-                        Box(Modifier.size(52.dp).clip(CircleShape).background(RematerialColors.DeepForest).clickable(role = Role.Button) { go(SellerPage.FORM) }.semantics { contentDescription = "Tambah produk" }, contentAlignment = Alignment.Center) { RematerialIcon(tab.icon, "Tambah produk", Modifier.size(25.dp), RematerialColors.Surface) }
+                        Box(Modifier.size(52.dp).clip(CircleShape).background(RematerialColors.DeepForest).clickable(role = Role.Button) { go(SellerPage.FORM) }.semantics { contentDescription = "Tambah produk" }, contentAlignment = Alignment.Center) { RematerialIcon(tab.icon, null, Modifier.size(25.dp), RematerialColors.Surface) }
                     } else {
                         val target = when (tab) { SellerTab.HOME -> SellerPage.HOME; SellerTab.PRODUCTS -> SellerPage.PRODUCTS; SellerTab.ORDERS -> SellerPage.ORDERS; SellerTab.ACCOUNT -> SellerPage.ACCOUNT; SellerTab.ADD -> SellerPage.FORM }
-                        Column(Modifier.width(68.dp).height(RematerialDockMetrics.surfaceHeight).clickable(role = Role.Tab) { go(target) }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { RematerialIcon(tab.icon, tab.label, Modifier.size(20.dp), if ((target == SellerPage.HOME && page == SellerPage.HOME) || (target == SellerPage.PRODUCTS && page == SellerPage.PRODUCTS) || (target == SellerPage.ORDERS && page == SellerPage.ORDERS) || (target == SellerPage.ACCOUNT && page == SellerPage.ACCOUNT)) RematerialColors.DeepForest else RematerialColors.Muted); Spacer(Modifier.height(4.dp)); Text(tab.label, style = MaterialTheme.typography.labelSmall, color = RematerialColors.Muted) }
+                        val active = target == page
+                        Column(Modifier.width(68.dp).height(RematerialDockMetrics.surfaceHeight).selectable(selected = active, role = Role.Tab) { go(target) }.padding(vertical = 7.dp).semantics { contentDescription = tab.label }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { RematerialIcon(tab.icon, null, Modifier.size(20.dp), if (active) RematerialColors.DeepForest else RematerialColors.Muted); Spacer(Modifier.height(4.dp)); Text(tab.label, style = MaterialTheme.typography.labelSmall, color = if (active) RematerialColors.DeepForest else RematerialColors.Muted) }
                     }
                 }
             }
@@ -125,7 +153,7 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
     val next = state.orders.firstOrNull { it.status == OrderStatus.PLACED }
     LazyColumn(
         modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp),
-        contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom),
+        contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom)),
     ) {
         item {
             RematerialTopBar("Ruang Penjual", actionIcon = RematerialIcons.UserRound, actionDescription = "Akun penjual", onAction = onAccount)
@@ -146,7 +174,7 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
             }
             Spacer(Modifier.height(28.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Produk terbaru", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Text("Lihat semua", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable(onClick = onProducts).padding(8.dp))
+                Text("Lihat semua", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = onProducts).padding(8.dp))
             }
         }
         items(state.listings.take(2), key = { it.id }) { listing ->
@@ -163,11 +191,11 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
 
 @Composable private fun SellerProductsScreen(listings: List<SellerListing>, onBack: () -> Unit, onOpen: (SellerListing) -> Unit, onAdd: () -> Unit) {
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom)) {
+    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item {
             RematerialTopBar("Produk", onBack = onBack); Spacer(Modifier.height(18.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text("Katalog studio.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text("Kelola karya yang terlihat di pasar.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted) }
-                Text("Tambah", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable(onClick = onAdd).padding(8.dp))
+                Text("Tambah", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = onAdd).padding(8.dp))
             }
         }
         items(listings, key = { it.id }) { listing ->
@@ -188,7 +216,7 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
 
 @Composable private fun SellerOrdersScreen(orders: List<SellerOrder>, onBack: () -> Unit, onOpen: (SellerOrder) -> Unit) {
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom)) {
+    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item { RematerialTopBar("Pesanan", onBack = onBack); Spacer(Modifier.height(18.dp)); Text("Pesanan masuk.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Satu per satu, sampai karya tiba.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(10.dp)) }
         items(orders, key = { it.id }) { order ->
             Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(order) }, color = RematerialColors.Surface, border = BorderStroke(1.dp, RematerialColors.Line), shape = RoundedCornerShape(14.dp)) {
@@ -198,11 +226,11 @@ fun SellerWorkspaceRoute(onLogout: () -> Unit, viewModel: SellerViewModel = hilt
     }
 }
 
-@Composable private fun SellerOrderDetail(order: SellerOrder, onBack: () -> Unit, onTransition: (OrderStatus) -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Detail pesanan", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) { item { Spacer(Modifier.height(18.dp)); Text(order.id, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("${order.productTitle} · ${order.buyerName}", style = MaterialTheme.typography.bodyLarge); Spacer(Modifier.height(22.dp)); Text("Status pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); OrderStatus.entries.forEach { status -> val isNext = status.ordinal == order.status.ordinal + 1; Row(Modifier.fillMaxWidth().clickable(enabled = isNext) { onTransition(status) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (status.ordinal <= order.status.ordinal) RematerialIcons.CircleCheck else RematerialIcons.Circle, null, Modifier.size(19.dp), if (status.ordinal <= order.status.ordinal) RematerialColors.DeepForest else if (isNext) RematerialColors.Bronze else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(status.label, style = MaterialTheme.typography.bodyMedium, color = if (status.ordinal <= order.status.ordinal) RematerialColors.Ink else if (isNext) RematerialColors.DeepForest else RematerialColors.Muted) } }; Spacer(Modifier.height(22.dp)); SellerDetail("Jumlah", "${order.quantity} unit"); SellerDetail("Total", rupiah(order.total)); SellerDetail("Alamat pembeli", order.address) } } } }
+@Composable private fun SellerOrderDetail(order: SellerOrder, onBack: () -> Unit, onTransition: (OrderStatus) -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Detail pesanan", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) { item { Spacer(Modifier.height(18.dp)); Text(order.id, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("${order.productTitle} · ${order.buyerName}", style = MaterialTheme.typography.bodyLarge); Spacer(Modifier.height(22.dp)); Text("Status pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); OrderStatus.entries.forEach { status -> val isNext = status.ordinal == order.status.ordinal + 1; Row(Modifier.fillMaxWidth().sizeIn(minHeight = 48.dp).clickable(enabled = isNext) { onTransition(status) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (status.ordinal <= order.status.ordinal) RematerialIcons.CircleCheck else RematerialIcons.Circle, null, Modifier.size(19.dp), if (status.ordinal <= order.status.ordinal) RematerialColors.DeepForest else if (isNext) RematerialColors.Bronze else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(status.label, style = MaterialTheme.typography.bodyMedium, color = if (status.ordinal <= order.status.ordinal) RematerialColors.Ink else if (isNext) RematerialColors.DeepForest else RematerialColors.Muted) } }; Spacer(Modifier.height(22.dp)); SellerDetail("Jumlah", "${order.quantity} unit"); SellerDetail("Total", rupiah(order.total)); SellerDetail("Alamat pembeli", order.address) } } } }
 
 @Composable private fun SellerAccountScreen(profile: SellerProfile, onBack: () -> Unit, onOnboarding: () -> Unit, onSettings: () -> Unit) {
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom)) {
+    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item { RematerialTopBar("Akun", onBack = onBack); Spacer(Modifier.height(22.dp)); Text(profile.storeName, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text("${profile.name} · ${profile.location}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); Text("Kelola studio", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(6.dp)); AccountSetting("Verifikasi penjual", "${profile.verification.label} · NIK dan dokumen", RematerialIcons.UserRound, onOnboarding); AccountSetting("Data toko", "Nama, lokasi, dan pemenuhan pesanan", RematerialIcons.Store, onOnboarding); AccountSetting("Pengaturan", "Notifikasi dan keamanan", RematerialIcons.Settings, onSettings) }
     }
 }

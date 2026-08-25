@@ -24,10 +24,12 @@ import com.rematerial.app.feature.analysis.domain.InitialAnalysisResponse
 import com.rematerial.app.feature.analysis.domain.InspectionFieldType
 import com.rematerial.app.feature.analysis.domain.MathCalculation
 import com.rematerial.app.feature.analysis.domain.ProductOption
+import com.rematerial.app.feature.analysis.domain.ProductParameterRequirement
 import com.rematerial.app.feature.analysis.domain.RequestedField
 import com.rematerial.app.feature.analysis.domain.SafetyAssessment
 import com.rematerial.app.feature.analysis.domain.ScoreComponents
 import com.rematerial.app.feature.analysis.domain.ScienceFinding
+import com.rematerial.app.feature.analysis.domain.RankedCategoryPrediction
 import kotlinx.serialization.Serializable
 
 object AnalysisHttpDtos {
@@ -36,9 +38,12 @@ object AnalysisHttpDtos {
         val analysisId: String,
         val category: String,
         val confidence: Double,
-        val alternatives: List<String> = emptyList(),
+        val predictions: List<CategoryPredictionDto> = emptyList(),
         val requestedFields: List<RequestedFieldDto> = emptyList(),
     )
+
+    @Serializable
+    data class CategoryPredictionDto(val category: String, val confidence: Double)
 
     @Serializable
     data class RequestedFieldDto(
@@ -48,14 +53,16 @@ object AnalysisHttpDtos {
         val unit: String? = null,
         val required: Boolean,
         val choices: List<String> = emptyList(),
+        val minimum: Double? = null,
+        val maximum: Double? = null,
+        val maximumLength: Int? = null,
+        val allowUnavailable: Boolean = !required,
     )
 
     @Serializable
     data class InitialRequestDto(
         val analysisId: String,
-        val photoPath: String? = null,
-        val contentType: String? = null,
-        val sizeBytes: Long? = null,
+        val mediaId: String? = null,
         val manualCategory: String? = null,
     )
 
@@ -105,7 +112,7 @@ object AnalysisHttpDtos {
     )
 
     @Serializable
-    data class MathInputDto(val name: String, val value: Double, val unit: String)
+    data class MathInputDto(val name: String, val value: Double, val unit: String, val observationRef: String? = null, val evidenceSource: String? = null)
 
     @Serializable
     data class MathCalculationDto(
@@ -136,13 +143,28 @@ object AnalysisHttpDtos {
         val explanation: String,
         val requiredMaterial: String,
         val requiredParameterIds: List<String>,
+        val parameterRequirements: List<ProductParameterRequirementDto>,
         val minimumQuantity: Double,
         val minimumUnit: String,
+        val estimatedUsedQuantity: Double,
+        val estimatedUsedUnit: String,
         val requiredToolIds: List<String>,
         val requiredSkillIds: List<String>,
         val prerequisiteFieldIds: List<String> = emptyList(),
+        val scoreFormulaId: String,
+        val scoreFormulaExpression: String,
+        val scoreEvidenceInputs: List<MathInputDto>,
         val scoreComponents: ScoreComponentsDto,
         val provisionalProductScore: Double,
+    )
+
+    @Serializable
+    data class ProductParameterRequirementDto(
+        val fieldId: String,
+        val acceptedChoices: List<String> = emptyList(),
+        val minimumNumeric: Double? = null,
+        val maximumNumeric: Double? = null,
+        val anyProvided: Boolean = false,
     )
 
     val initialResponseSerializer = InitialResponseDto.serializer()
@@ -153,17 +175,18 @@ object AnalysisMappers {
         analysisId = response.analysisId.value,
         category = response.prediction.category.name,
         confidence = response.prediction.confidence,
-        alternatives = response.prediction.alternatives.map(MaterialCategory::name),
+        predictions = response.prediction.rankedCandidates.map { AnalysisHttpDtos.CategoryPredictionDto(it.category.name, it.confidence) },
         requestedFields = response.requestedFields.map { field ->
-            AnalysisHttpDtos.RequestedFieldDto(field.id.value, field.label, field.type.name, field.unit?.name, field.required, field.choices)
+            AnalysisHttpDtos.RequestedFieldDto(
+                field.id.value, field.label, field.type.name, field.unit?.name, field.required,
+                field.choices, field.minimum, field.maximum, field.maximumLength, field.allowUnavailable,
+            )
         },
     )
 
     fun toDto(request: InitialAnalysisRequest): AnalysisHttpDtos.InitialRequestDto = AnalysisHttpDtos.InitialRequestDto(
         request.analysisId.value,
-        request.photo?.privatePath,
-        request.photo?.contentType,
-        request.photo?.sizeBytes,
+        request.photo?.mediaId,
         request.manualCategory?.name,
     )
 
@@ -202,10 +225,17 @@ object AnalysisMappers {
             RequestedField(
                 id = FieldId(it.id), label = it.label, type = InspectionFieldType.valueOf(it.type),
                 unit = it.unit?.let(UnitCode::valueOf), required = it.required, choices = it.choices,
+                minimum = it.minimum, maximum = it.maximum, maximumLength = it.maximumLength,
+                allowUnavailable = it.allowUnavailable,
             )
         }
         val response = InitialAnalysisResponse(
-            AnalysisId(dto.analysisId), CategoryPrediction(category, dto.confidence, dto.alternatives.map(MaterialCategory::valueOf)), fields,
+            AnalysisId(dto.analysisId), CategoryPrediction(
+                category,
+                dto.confidence,
+                dto.predictions.ifEmpty { listOf(AnalysisHttpDtos.CategoryPredictionDto(dto.category, dto.confidence)) }
+                    .map { RankedCategoryPrediction(MaterialCategory.valueOf(it.category), it.confidence) },
+            ), fields,
         )
         when (val validation = AnalysisValidator.validate(response)) {
             is Result.Success -> Result.Success(response)
@@ -220,10 +250,34 @@ object AnalysisMappers {
             AnalysisId(dto.analysisId), MaterialCategory.valueOf(dto.category), dto.confidence,
             dto.observations.map(::fromDto).fold(emptyList()) { acc, result -> acc + result },
             dto.science.map { ScienceFinding(FindingId(it.findingId), it.title, it.observationRefs.map(::FieldId), it.principle, it.sourceRefs.map(::SourceId), it.interpretation, it.limitation, it.recommendedVerification) },
-            dto.mathematics.map { MathCalculation(it.calculationId, it.inputs.map { input -> CalculationInput(input.name, input.value, UnitCode.valueOf(input.unit)) }, it.formulaId, it.formulaExpression, it.result, UnitCode.valueOf(it.unit), it.limitations) },
+            dto.mathematics.map { MathCalculation(it.calculationId, it.inputs.map { input -> CalculationInput(input.name, input.value, UnitCode.valueOf(input.unit), input.observationRef?.let(::FieldId), input.evidenceSource) }, it.formulaId, it.formulaExpression, it.result, UnitCode.valueOf(it.unit), it.limitations) },
             SafetyAssessment(SafetyOutcome.valueOf(dto.safety.outcome), dto.safety.reasons),
             dto.productOptions.map { option ->
-                ProductOption(ProductOptionId(option.optionId), option.title, option.explanation, option.requiredMaterial, option.requiredParameterIds.map(::FieldId), option.minimumQuantity, UnitCode.valueOf(option.minimumUnit), option.requiredToolIds, option.requiredSkillIds, option.prerequisiteFieldIds.map(::FieldId), ScoreComponents(option.scoreComponents.propertyFit, option.scoreComponents.materialSufficiency, option.scoreComponents.economicPotential, option.scoreComponents.residueReduction), option.provisionalProductScore)
+                ProductOption(
+                    optionId = ProductOptionId(option.optionId),
+                    title = option.title,
+                    explanation = option.explanation,
+                    requiredMaterial = option.requiredMaterial,
+                    requiredParameterIds = option.requiredParameterIds.map(::FieldId),
+                    parameterRequirements = option.parameterRequirements.map { requirement ->
+                        ProductParameterRequirement(
+                            FieldId(requirement.fieldId), requirement.acceptedChoices,
+                            requirement.minimumNumeric, requirement.maximumNumeric, requirement.anyProvided,
+                        )
+                    },
+                    minimumQuantity = option.minimumQuantity,
+                    minimumUnit = UnitCode.valueOf(option.minimumUnit),
+                    estimatedUsedQuantity = option.estimatedUsedQuantity,
+                    estimatedUsedUnit = UnitCode.valueOf(option.estimatedUsedUnit),
+                    requiredToolIds = option.requiredToolIds,
+                    requiredSkillIds = option.requiredSkillIds,
+                    prerequisiteFieldIds = option.prerequisiteFieldIds.map(::FieldId),
+                    scoreFormulaId = option.scoreFormulaId,
+                    scoreFormulaExpression = option.scoreFormulaExpression,
+                    scoreEvidenceInputs = option.scoreEvidenceInputs.map { CalculationInput(it.name, it.value, UnitCode.valueOf(it.unit), it.observationRef?.let(::FieldId), it.evidenceSource) },
+                    scoreComponents = ScoreComponents(option.scoreComponents.propertyFit, option.scoreComponents.materialSufficiency, option.scoreComponents.economicPotential, option.scoreComponents.residueReduction),
+                    provisionalProductScore = option.provisionalProductScore,
+                )
             },
         )
         when (AnalysisValidator.validate(response)) {

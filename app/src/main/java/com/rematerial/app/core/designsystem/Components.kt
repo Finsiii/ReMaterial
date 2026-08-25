@@ -53,8 +53,17 @@ object RematerialDockMetrics {
     val surfaceHeight = 74.dp
     val bottomGap = 8.dp
     val minHitTarget = 48.dp
-    val reservedBottom = surfaceHeight + (outerVerticalPadding * 2) + bottomGap
+    val reservedBottom = surfaceHeight + outerVerticalPadding + bottomGap
+
+    fun contentBottomPadding(navigationBarInset: Dp): Dp = reservedBottom + navigationBarInset
+    fun screenBottomPadding(navigationBarInset: Dp, dockVisible: Boolean): Dp =
+        navigationBarInset + if (dockVisible) reservedBottom else 24.dp
 }
+
+enum class HorizontalPageMotion { FORWARD, BACKWARD }
+
+fun horizontalPageMotion(initialPosition: Int, targetPosition: Int): HorizontalPageMotion =
+    if (targetPosition >= initialPosition) HorizontalPageMotion.FORWARD else HorizontalPageMotion.BACKWARD
 
 @Composable
 fun RematerialIcon(
@@ -170,13 +179,13 @@ fun RematerialTopBar(
         onBack?.let { callback ->
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(RematerialDockMetrics.minHitTarget)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(role = Role.Button, onClick = callback)
                     .semantics { contentDescription = "Kembali" },
                 contentAlignment = Alignment.Center,
             ) {
-                RematerialIcon(RematerialIcons.Back, "Kembali", Modifier.size(20.dp), RematerialColors.Ink)
+                RematerialIcon(RematerialIcons.Back, null, Modifier.size(20.dp), RematerialColors.Ink)
             }
             Spacer(Modifier.width(4.dp))
         }
@@ -189,13 +198,13 @@ fun RematerialTopBar(
         if (actionIcon != null && onAction != null) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(RematerialDockMetrics.minHitTarget)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(role = Role.Button, onClick = onAction)
                     .semantics { contentDescription = actionDescription ?: "Aksi" },
                 contentAlignment = Alignment.Center,
             ) {
-                RematerialIcon(actionIcon, actionDescription, Modifier.size(20.dp), RematerialColors.Ink)
+                RematerialIcon(actionIcon, null, Modifier.size(20.dp), RematerialColors.Ink)
             }
         }
     }
@@ -263,9 +272,10 @@ fun RematerialDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = RematerialDockMetrics.horizontalPadding)
             .padding(
-                horizontal = RematerialDockMetrics.horizontalPadding,
-                vertical = RematerialDockMetrics.outerVerticalPadding,
+                top = RematerialDockMetrics.outerVerticalPadding,
+                bottom = RematerialDockMetrics.bottomGap,
             ),
         contentAlignment = Alignment.Center,
     ) {

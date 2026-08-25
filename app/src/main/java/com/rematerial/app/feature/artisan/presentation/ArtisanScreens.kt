@@ -1,7 +1,14 @@
 package com.rematerial.app.feature.artisan.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,18 +22,24 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +58,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
+import com.rematerial.app.core.designsystem.HorizontalPageMotion
+import com.rematerial.app.core.designsystem.RematerialDockMetrics
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
@@ -55,13 +70,15 @@ import com.rematerial.app.feature.artisan.domain.ArtisanJobStatus
 import com.rematerial.app.feature.artisan.domain.ArtisanProfileDraft
 import com.rematerial.app.feature.artisan.domain.ProfileSubmissionState
 
-private enum class ArtisanPage { HOME, JOB, PROFILE, SETTINGS }
+internal enum class ArtisanPage { HOME, JOB, PROFILE, SETTINGS }
+internal enum class ArtisanProfileOrigin { HOME, SETTINGS }
 private enum class ArtisanTab(val label: String, val icon: Int) {
     HOME("Beranda", RematerialIcons.Hammer),
     PROFILE("Profil", RematerialIcons.UserRound),
     SETTINGS("Akun", RematerialIcons.Settings),
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ArtisanWorkspaceRoute(
     onLogout: () -> Unit,
@@ -69,38 +86,63 @@ fun ArtisanWorkspaceRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var pageName by rememberSaveable { mutableStateOf(ArtisanPage.HOME.name) }
+    var motionName by rememberSaveable { mutableStateOf(HorizontalPageMotion.FORWARD.name) }
+    var profileOriginName by rememberSaveable { mutableStateOf(ArtisanProfileOrigin.HOME.name) }
     val page = ArtisanPage.valueOf(pageName)
-    when (page) {
-        ArtisanPage.HOME -> ArtisanHomeScreen(state.jobs, { viewModel.selectJob(it); pageName = ArtisanPage.JOB.name }, { pageName = ArtisanPage.PROFILE.name }, { pageName = ArtisanPage.SETTINGS.name })
-        ArtisanPage.JOB -> state.selectedJob?.let { ArtisanJobDetailScreen(it, viewModel::clearJob, viewModel::transition) } ?: run { pageName = ArtisanPage.HOME.name }
-        ArtisanPage.PROFILE -> ArtisanProfileScreen(state.profile, { pageName = ArtisanPage.HOME.name }, viewModel::updateProfile)
-        ArtisanPage.SETTINGS -> ArtisanSettingsScreen(state.profile, { pageName = ArtisanPage.HOME.name }, { pageName = ArtisanPage.PROFILE.name }, onLogout)
+    val motion = HorizontalPageMotion.valueOf(motionName)
+    val profileOrigin = ArtisanProfileOrigin.valueOf(profileOriginName)
+    val go: (ArtisanPage, Boolean) -> Unit = { target, isBack -> motionName = if (isBack) HorizontalPageMotion.BACKWARD.name else HorizontalPageMotion.FORWARD.name; pageName = target.name }
+    BackHandler(enabled = page != ArtisanPage.HOME) {
+        if (page == ArtisanPage.JOB) viewModel.clearJob()
+        val target = if (page == ArtisanPage.PROFILE) artisanProfileBackTarget(profileOrigin) else ArtisanPage.HOME
+        go(target, artisanTabPosition(target) < artisanTabPosition(page) || page == ArtisanPage.JOB)
     }
-    if (page != ArtisanPage.JOB) {
-        ArtisanDock(page) { target -> pageName = target.name }
+    LaunchedEffect(page, state.selectedJob) {
+        if (page == ArtisanPage.JOB && state.selectedJob == null) go(ArtisanPage.HOME, true)
+        if (page != ArtisanPage.JOB && state.selectedJob != null) viewModel.clearJob()
+    }
+    Box(Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                if (motion == HorizontalPageMotion.FORWARD) slideInHorizontally(tween(210)) { it } togetherWith slideOutHorizontally(tween(210)) { -it }
+                else slideInHorizontally(tween(210)) { -it } togetherWith slideOutHorizontally(tween(210)) { it }
+            },
+            label = "artisan-page-transition",
+        ) { currentPage ->
+            when (currentPage) {
+                ArtisanPage.HOME -> ArtisanHomeScreen(state.jobs, { viewModel.selectJob(it); go(ArtisanPage.JOB, false) }, { profileOriginName = ArtisanProfileOrigin.HOME.name; go(ArtisanPage.PROFILE, false) }, { go(ArtisanPage.SETTINGS, false) })
+                ArtisanPage.JOB -> state.selectedJob?.let { ArtisanJobDetailScreen(it, { viewModel.clearJob(); go(ArtisanPage.HOME, true) }, viewModel::transition) } ?: ArtisanHomeScreen(state.jobs, { viewModel.selectJob(it); go(ArtisanPage.JOB, false) }, { profileOriginName = ArtisanProfileOrigin.HOME.name; go(ArtisanPage.PROFILE, false) }, { go(ArtisanPage.SETTINGS, false) })
+                ArtisanPage.PROFILE -> ArtisanProfileScreen(state.profile, { val target = artisanProfileBackTarget(profileOrigin); go(target, artisanTabPosition(target) < artisanTabPosition(ArtisanPage.PROFILE)) }, viewModel::updateProfile)
+                ArtisanPage.SETTINGS -> ArtisanSettingsScreen(state.profile, { go(ArtisanPage.HOME, true) }, { profileOriginName = ArtisanProfileOrigin.SETTINGS.name; go(ArtisanPage.PROFILE, true) }, onLogout)
+            }
+        }
+        if (page != ArtisanPage.JOB) ArtisanDock(page) { target -> if (target == ArtisanPage.PROFILE) profileOriginName = ArtisanProfileOrigin.HOME.name; go(target, artisanTabPosition(target) < artisanTabPosition(page)) }
     }
 }
 
+private fun artisanTabPosition(page: ArtisanPage): Int = when (page) { ArtisanPage.HOME -> 0; ArtisanPage.PROFILE -> 1; ArtisanPage.SETTINGS -> 2; ArtisanPage.JOB -> 0 }
+internal fun artisanProfileBackTarget(origin: ArtisanProfileOrigin): ArtisanPage = if (origin == ArtisanProfileOrigin.SETTINGS) ArtisanPage.SETTINGS else ArtisanPage.HOME
+
 @Composable
 private fun ArtisanDock(page: ArtisanPage, onSelect: (ArtisanPage) -> Unit) {
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Surface(
-            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = bottom + 12.dp),
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding, bottom = RematerialDockMetrics.bottomGap),
             color = RematerialColors.Surface,
             shape = RoundedCornerShape(22.dp),
             shadowElevation = 8.dp,
             border = BorderStroke(1.dp, RematerialColors.Line),
         ) {
-            Row(Modifier.fillMaxWidth().height(70.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
                 ArtisanTab.entries.forEach { tab ->
                     val target = when (tab) {
                         ArtisanTab.HOME -> ArtisanPage.HOME
                         ArtisanTab.PROFILE -> ArtisanPage.PROFILE
                         ArtisanTab.SETTINGS -> ArtisanPage.SETTINGS
                     }
-                    Column(Modifier.width(80.dp).clickable(role = Role.Tab) { onSelect(target) }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        RematerialIcon(tab.icon, tab.label, Modifier.size(20.dp), if (page == target) RematerialColors.DeepForest else RematerialColors.Muted)
+                    Column(Modifier.width(80.dp).height(RematerialDockMetrics.surfaceHeight).selectable(selected = page == target, role = Role.Tab) { onSelect(target) }.semantics { contentDescription = tab.label }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        RematerialIcon(tab.icon, null, Modifier.size(20.dp), if (page == target) RematerialColors.DeepForest else RematerialColors.Muted)
                         Spacer(Modifier.height(4.dp))
                         Text(tab.label, style = MaterialTheme.typography.labelSmall, color = if (page == target) RematerialColors.DeepForest else RematerialColors.Muted)
                     }
@@ -118,14 +160,14 @@ private fun ArtisanHomeScreen(
     onSettings: () -> Unit,
 ) {
     val current = jobs.firstOrNull { it.status == ArtisanJobStatus.PROCESSING } ?: jobs.firstOrNull()
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { RematerialTopBar("Ruang Pengrajin", actionIcon = RematerialIcons.UserRound, actionDescription = "Profil pengrajin", onAction = onProfile) }
         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Selamat datang, Bima.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Kerjakan yang paling penting.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink) }; RematerialIcon(RematerialIcons.Bell, "Notifikasi", Modifier.size(22.dp), RematerialColors.DeepForest) } }
         item { Text("Pekerjaan utama", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink) }
         current?.let { item { PriorityJobCard(it, onJob) } }
         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("Antrean pekerjaan", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f)); Text("${jobs.size} pekerjaan", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) } }
         items(jobs.filter { it.id != current?.id }, key = { it.id }) { job -> QueueRow(job, onJob) }
-        item { Text("Pengaturan akun", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable(onClick = onSettings).padding(vertical = 12.dp)) }
+        item { Text("Pengaturan akun", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = onSettings).padding(vertical = 12.dp)) }
     }
 }
 
@@ -183,7 +225,7 @@ private fun ArtisanProfileScreen(profile: ArtisanProfileDraft, onBack: () -> Uni
     val ktpPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { draft = draft.copy(ktpUri = it.toString(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) } }
     val selfiePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { draft = draft.copy(selfieUri = it.toString(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) } }
     val portfolioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) draft = draft.copy(portfolioUris = (draft.portfolioUris + uris.map { it.toString() }).distinct(), submissionState = ProfileSubmissionState.NOT_SUBMITTED) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) {
         RematerialTopBar("Profil pengrajin", onBack = onBack)
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item { Spacer(Modifier.height(16.dp)); Text("Lengkapi ruang kerjamu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Data ini hanya demo lokal untuk menyiapkan alur verifikasi pengrajin.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); RematerialField(draft.name, { draft = draft.copy(name = it) }, "Nama tampilan"); Spacer(Modifier.height(16.dp)); RematerialField(draft.nik, { draft = draft.copy(nik = it, submissionState = ProfileSubmissionState.NOT_SUBMITTED) }, "NIK", placeholder = "Masukkan 16 digit NIK", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)); Spacer(Modifier.height(18.dp)); PickerRow("Foto KTP", if (draft.ktpUri == null) "Belum dipilih" else "Foto demo terpilih", { ktpPicker.launch("image/*") }); PickerRow("Foto selfie", if (draft.selfieUri == null) "Belum dipilih" else "Foto demo terpilih", { selfiePicker.launch("image/*") }); PickerRow("Portofolio karya", if (draft.portfolioUris.isEmpty()) "Belum ada foto" else "${draft.portfolioUris.size} foto demo terpilih", { portfolioPicker.launch("image/*") }); Spacer(Modifier.height(12.dp)); Text("Status: ${draft.submissionState.label}", style = MaterialTheme.typography.bodyMedium, color = if (draft.submissionState == ProfileSubmissionState.NEEDS_CORRECTION) androidx.compose.ui.graphics.Color(0xFF9B3F2F) else RematerialColors.DeepForest); if (draft.submissionState == ProfileSubmissionState.NEEDS_CORRECTION) { Spacer(Modifier.height(6.dp)); Text("Foto KTP perlu lebih terang. Perbarui pilihan lalu kirim kembali.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; if (draft.submissionState == ProfileSubmissionState.SUBMITTED) { Spacer(Modifier.height(10.dp)); Text("Simulasikan koreksi untuk demo", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.clickable { draft = draft.copy(submissionState = ProfileSubmissionState.NEEDS_CORRECTION); onSave(draft) }.padding(vertical = 8.dp)) }; Spacer(Modifier.height(20.dp)); RematerialButton("Kirim untuk ditinjau", { draft = draft.copy(submissionState = ProfileSubmissionState.SUBMITTED); onSave(draft) }, Modifier.fillMaxWidth(), enabled = draft.nik.length == 16 && draft.ktpUri != null && draft.selfieUri != null, leadingIcon = RematerialIcons.Upload) }
@@ -198,7 +240,7 @@ private fun PickerRow(title: String, supporting: String, onClick: () -> Unit) {
 
 @Composable
 private fun ArtisanSettingsScreen(profile: ArtisanProfileDraft, onBack: () -> Unit, onProfile: () -> Unit, onLogout: () -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) { RematerialTopBar("Pengaturan", onBack = onBack); Spacer(Modifier.height(24.dp)); Text(profile.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("artisan@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); SettingsRow("Profil dan verifikasi", "NIK, dokumen demo, dan portofolio", onProfile); Spacer(Modifier.height(30.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) { item { RematerialTopBar("Pengaturan", onBack = onBack); Spacer(Modifier.height(24.dp)); Text(profile.name, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text("artisan@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); SettingsRow("Profil dan verifikasi", "NIK, dokumen demo, dan portofolio", onProfile); Spacer(Modifier.height(30.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) } }
 }
 
 @Composable

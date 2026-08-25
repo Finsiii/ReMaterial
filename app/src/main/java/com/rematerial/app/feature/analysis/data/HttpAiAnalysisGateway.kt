@@ -9,6 +9,7 @@ import com.rematerial.app.feature.analysis.domain.InitialAnalysisRequest
 import com.rematerial.app.feature.analysis.domain.InitialAnalysisResponse
 import com.rematerial.app.feature.analysis.transport.AnalysisHttpDtos
 import com.rematerial.app.feature.analysis.transport.AnalysisMappers
+import com.rematerial.app.core.media.MediaPayloadReader
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.header
@@ -18,6 +19,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.Headers
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -28,10 +32,24 @@ class HttpAiAnalysisGateway(
     private val client: HttpClient,
     private val baseUrl: String,
     private val json: Json = Json { ignoreUnknownKeys = false; explicitNulls = false },
+    private val mediaPayloadReader: MediaPayloadReader? = null,
+    private val authorizationProvider: AnalysisAuthorizationProvider = AnalysisAuthorizationProvider.None,
 ) : AiAnalysisGateway {
     override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> {
         if (!isSecureBaseUrl()) return Result.Failure(DomainFailure.Validation(listOf("ReMaterial API URL must use HTTPS")))
-        return execute("/v1/analysis/initial", json.encodeToString(AnalysisHttpDtos.InitialRequestDto.serializer(), AnalysisMappers.toDto(request))) { body ->
+        val requestJson = json.encodeToString(AnalysisHttpDtos.InitialRequestDto.serializer(), AnalysisMappers.toDto(request))
+        val photo = request.photo
+        if (photo != null) {
+            val reader = mediaPayloadReader ?: return Result.Failure(DomainFailure.Unavailable)
+            val bytes = when (val payload = reader.read(photo)) {
+                is Result.Success -> payload.value
+                is Result.Failure -> return payload
+            }
+            return executeMultipart("/v1/analysis/initial", requestJson, photo.contentType, bytes) { body ->
+                AnalysisMappers.fromDto(json.decodeFromString<AnalysisHttpDtos.InitialResponseDto>(body))
+            }
+        }
+        return execute("/v1/analysis/initial", requestJson) { body ->
             AnalysisMappers.fromDto(json.decodeFromString<AnalysisHttpDtos.InitialResponseDto>(body))
         }
     }
@@ -51,6 +69,7 @@ class HttpAiAnalysisGateway(
         val response = client.post(baseUrl.trimEnd('/') + path) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+            authorizationProvider.authorizationHeader()?.let { header(HttpHeaders.Authorization, it) }
             setBody(requestBody)
         }
         when {
@@ -72,5 +91,50 @@ class HttpAiAnalysisGateway(
         Result.Failure(DomainFailure.MalformedResponse)
     }
 
+    private suspend fun <Response> executeMultipart(
+        path: String,
+        metadata: String,
+        contentType: String,
+        bytes: ByteArray,
+        decode: (String) -> Result<Response>,
+    ): Result<Response> = try {
+        val response = client.post(baseUrl.trimEnd('/') + path) {
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+            authorizationProvider.authorizationHeader()?.let { header(HttpHeaders.Authorization, it) }
+            setBody(MultiPartFormDataContent(formData {
+                append("metadata", metadata, Headers.build { append(HttpHeaders.ContentType, ContentType.Application.Json.toString()) })
+                append("photo", bytes, Headers.build {
+                    append(HttpHeaders.ContentType, contentType)
+                    append(HttpHeaders.ContentDisposition, "filename=material-upload")
+                })
+            }))
+        }
+        when {
+            response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden -> Result.Failure(DomainFailure.Unauthorized)
+            response.status == HttpStatusCode.RequestTimeout || response.status.value == 504 -> Result.Failure(DomainFailure.Timeout)
+            response.status.value == 400 || response.status.value == 413 || response.status.value == 415 || response.status.value == 422 -> Result.Failure(DomainFailure.UnsupportedImage)
+            response.status.value !in 200..299 -> Result.Failure(DomainFailure.Unavailable)
+            else -> decode(response.bodyAsText())
+        }
+    } catch (_: HttpRequestTimeoutException) {
+        Result.Failure(DomainFailure.Timeout)
+    } catch (_: SocketTimeoutException) {
+        Result.Failure(DomainFailure.Timeout)
+    } catch (_: SerializationException) {
+        Result.Failure(DomainFailure.MalformedResponse)
+    } catch (_: IOException) {
+        Result.Failure(DomainFailure.Offline)
+    } catch (_: IllegalArgumentException) {
+        Result.Failure(DomainFailure.MalformedResponse)
+    }
+
     private fun isSecureBaseUrl(): Boolean = baseUrl.trim().startsWith("https://") && baseUrl.trim().length > "https://".length
+}
+
+fun interface AnalysisAuthorizationProvider {
+    fun authorizationHeader(): String?
+
+    data object None : AnalysisAuthorizationProvider {
+        override fun authorizationHeader(): String? = null
+    }
 }

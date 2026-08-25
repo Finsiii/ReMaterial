@@ -7,13 +7,13 @@ import com.rematerial.app.core.model.UnitCode
 /** Turns API vocabulary into words that make sense to someone making things. */
 object AnalysisPresentation {
     fun safetyTitle(outcome: SafetyOutcome): String = when (outcome) {
-        SafetyOutcome.ALLOW -> "Bisa mulai dengan aman"
+        SafetyOutcome.ALLOW -> "Bisa dipertimbangkan untuk tahap awal"
         SafetyOutcome.CAUTION -> "Perlu cek tambahan"
         SafetyOutcome.BLOCK -> "Tunda dulu prosesnya"
     }
 
     fun safetyBody(outcome: SafetyOutcome): String = when (outcome) {
-        SafetyOutcome.ALLOW -> "Bahan ini cukup aman untuk eksplorasi awal. Tetap gunakan alat pelindung yang sesuai."
+        SafetyOutcome.ALLOW -> "Data awal tidak menunjukkan hambatan utama. Tetap gunakan pelindung yang sesuai dan minta pemeriksaan langsung sebelum produksi."
         SafetyOutcome.CAUTION -> "Bahan ini masih bisa dimanfaatkan setelah beberapa hal penting diperiksa."
         SafetyOutcome.BLOCK -> "Jangan diproses sebelum sumber risikonya diperiksa dan dinyatakan aman."
     }

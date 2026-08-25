@@ -1,5 +1,6 @@
 package com.rematerial.app.feature.marketplace.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,13 +16,17 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,6 +40,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,11 +57,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
-import com.rematerial.app.core.designsystem.RematerialDock
 import com.rematerial.app.core.designsystem.RematerialDockMetrics
+import com.rematerial.app.core.designsystem.HorizontalPageMotion
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
@@ -72,50 +77,90 @@ private enum class MarketPage { HOME, DETAIL, CART, CHECKOUT, SUCCESS, ORDERS, O
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MarketplaceRoute(
-    onDestinationSelected: (DockDestination) -> Unit,
     viewModel: MarketplaceViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var pageName by rememberSaveable { mutableStateOf(MarketPage.HOME.name) }
+    var motionName by rememberSaveable { mutableStateOf(HorizontalPageMotion.FORWARD.name) }
     var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     val page = MarketPage.valueOf(pageName)
-    val go = { target: MarketPage -> pageName = target.name }
+    val motion = HorizontalPageMotion.valueOf(motionName)
+    val go: (MarketPage, Boolean) -> Unit = { target, isBack ->
+        motionName = if (isBack) HorizontalPageMotion.BACKWARD.name else HorizontalPageMotion.FORWARD.name
+        pageName = target.name
+    }
+    BackHandler(enabled = page != MarketPage.HOME) {
+        val parent = when (page) {
+            MarketPage.DETAIL, MarketPage.CART, MarketPage.ORDERS -> MarketPage.HOME
+            MarketPage.CHECKOUT -> MarketPage.CART
+            MarketPage.SUCCESS -> MarketPage.HOME
+            MarketPage.ORDER_DETAIL -> MarketPage.ORDERS
+            MarketPage.HOME -> MarketPage.HOME
+        }
+        if (page == MarketPage.DETAIL) viewModel.closeProduct()
+        if (page == MarketPage.ORDER_DETAIL) selectedOrderId = null
+        go(parent, true)
+    }
+    LaunchedEffect(page, state.selectedProduct, selectedOrderId, state.orders) {
+        when {
+            page == MarketPage.DETAIL && state.selectedProduct == null -> go(MarketPage.HOME, true)
+            page == MarketPage.ORDER_DETAIL && state.orders.none { it.id == selectedOrderId } -> {
+                selectedOrderId = null
+                go(MarketPage.ORDERS, true)
+            }
+            page != MarketPage.DETAIL && page != MarketPage.CART && state.selectedProduct != null -> viewModel.closeProduct()
+            page != MarketPage.ORDER_DETAIL && selectedOrderId != null -> selectedOrderId = null
+        }
+    }
     Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                val forward = targetState.ordinal >= initialState.ordinal
-                if (forward) {
-                    slideInHorizontally(tween(280)) { it } togetherWith slideOutHorizontally(tween(280)) { -it }
+                if (motion == HorizontalPageMotion.FORWARD) {
+                    slideInHorizontally(tween(210)) { it } togetherWith slideOutHorizontally(tween(210)) { -it }
                 } else {
-                    slideInHorizontally(tween(280)) { -it } togetherWith slideOutHorizontally(tween(280)) { it }
+                    slideInHorizontally(tween(210)) { -it } togetherWith slideOutHorizontally(tween(210)) { it }
                 }
             },
             label = "market-page-transition",
         ) { currentPage ->
             when (currentPage) {
-                MarketPage.HOME -> MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL) }, { go(MarketPage.CART) })
-                MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME) }, { viewModel.add(it); go(MarketPage.CART) }) } ?: MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL) }, { go(MarketPage.CART) })
-                MarketPage.CART -> CartScreen(state.cart, state.sellerSwitchPrompt, viewModel::increment, viewModel::decrement, viewModel::remove, viewModel::dismissPrompt, { state.selectedProduct?.let(viewModel::confirmSellerSwitch) }, { go(MarketPage.CHECKOUT) }, { go(MarketPage.HOME) })
-                MarketPage.CHECKOUT -> CheckoutScreen(state.cart, { viewModel.placeOrder(it); go(MarketPage.SUCCESS) }, { go(MarketPage.CART) })
-                MarketPage.SUCCESS -> OrderSuccessScreen(state.lastOrder, { viewModel.clearLastOrder(); go(MarketPage.HOME) }, { go(MarketPage.ORDERS) })
-                MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
-                MarketPage.ORDER_DETAIL -> state.orders.firstOrNull { it.id == selectedOrderId }?.let { OrderDetailScreen(it, { go(MarketPage.ORDERS) }) } ?: OrderHistoryScreen(state.orders, { go(MarketPage.HOME) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL) })
+                MarketPage.HOME -> MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL, false) }, { go(MarketPage.CART, false) })
+                MarketPage.DETAIL -> state.selectedProduct?.let { ProductDetailScreen(it, { viewModel.closeProduct(); go(MarketPage.HOME, true) }, { viewModel.add(it); go(MarketPage.CART, false) }) } ?: MarketHomeScreen(state, viewModel::search, viewModel::category, { product -> viewModel.open(product); go(MarketPage.DETAIL, false) }, { go(MarketPage.CART, false) })
+                MarketPage.CART -> CartScreen(state.cart, state.sellerSwitchPrompt, viewModel::increment, viewModel::decrement, viewModel::remove, viewModel::dismissPrompt, { state.selectedProduct?.let(viewModel::confirmSellerSwitch) }, { go(MarketPage.CHECKOUT, false) }, { go(MarketPage.HOME, true) })
+                MarketPage.CHECKOUT -> CheckoutScreen(state.cart, { viewModel.placeOrder(it); go(MarketPage.SUCCESS, false) }, { go(MarketPage.CART, true) })
+                MarketPage.SUCCESS -> OrderSuccessScreen(state.lastOrder, { viewModel.clearLastOrder(); go(MarketPage.HOME, true) }, { go(MarketPage.ORDERS, false) })
+                MarketPage.ORDERS -> OrderHistoryScreen(state.orders, { go(MarketPage.HOME, true) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL, false) }, dockVisible = true)
+                MarketPage.ORDER_DETAIL -> state.orders.firstOrNull { it.id == selectedOrderId }?.let { OrderDetailScreen(it, { selectedOrderId = null; go(MarketPage.ORDERS, true) }, dockVisible = true) } ?: OrderHistoryScreen(state.orders, { go(MarketPage.HOME, true) }, { order -> selectedOrderId = order.id; go(MarketPage.ORDER_DETAIL, false) }, dockVisible = true)
             }
-        }
-        if (page == MarketPage.HOME) {
-            RematerialDock(DockDestination.Pasar, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
         }
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MarketplaceOrdersRoute(onBack: () -> Unit, viewModel: MarketplaceViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    val selected = state.orders.firstOrNull { it.id == selectedId }
-    if (selected == null) OrderHistoryScreen(state.orders, onBack) { selectedId = it.id }
-    else OrderDetailScreen(selected, { selectedId = null })
+    var motionName by rememberSaveable { mutableStateOf(HorizontalPageMotion.FORWARD.name) }
+    val motion = HorizontalPageMotion.valueOf(motionName)
+    val closeDetail = { motionName = HorizontalPageMotion.BACKWARD.name; selectedId = null }
+    BackHandler(enabled = selectedId != null, onBack = closeDetail)
+    LaunchedEffect(selectedId, state.orders) {
+        if (selectedId != null && state.orders.none { it.id == selectedId }) closeDetail()
+    }
+    AnimatedContent(
+        targetState = selectedId,
+        transitionSpec = {
+            if (motion == HorizontalPageMotion.FORWARD) slideInHorizontally(tween(210)) { it } togetherWith slideOutHorizontally(tween(210)) { -it }
+            else slideInHorizontally(tween(210)) { -it } togetherWith slideOutHorizontally(tween(210)) { it }
+        },
+        label = "standalone-orders-transition",
+    ) { currentId ->
+        val selected = state.orders.firstOrNull { it.id == currentId }
+        if (selected == null) OrderHistoryScreen(state.orders, onBack, { motionName = HorizontalPageMotion.FORWARD.name; selectedId = it.id }, dockVisible = false)
+        else OrderDetailScreen(selected, closeDetail, dockVisible = false)
+    }
 }
 
 @Composable
@@ -124,7 +169,7 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
     LazyColumn(
         modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
-        contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.reservedBottom + bottom),
+        contentPadding = PaddingValues(top = 14.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom)),
     ) {
         item {
             RematerialTopBar("Pasar", actionIcon = RematerialIcons.ShoppingBag, actionDescription = "Keranjang", onAction = onCart)
@@ -135,7 +180,7 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
             Spacer(Modifier.height(20.dp))
             RematerialField(state.query, onSearch, "Cari di pasar", placeholder = "Cari produk atau material", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 CategoryLink("Semua", state.category == null) { onCategory(null) }
                 listOf("Logam", "Kayu", "Tekstil").forEach { category -> CategoryLink(category, state.category == category) { onCategory(category) } }
             }
@@ -153,7 +198,7 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 }
 
 @Composable private fun CategoryLink(label: String, active: Boolean, onClick: () -> Unit) {
-    Text(label, style = MaterialTheme.typography.labelLarge, color = if (active) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.clickable(role = Role.Tab, onClick = onClick).padding(vertical = 8.dp).semantics { contentDescription = "Filter kategori $label" })
+    Text(label, style = MaterialTheme.typography.labelLarge, color = if (active) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.sizeIn(minHeight = 48.dp).selectable(selected = active, role = Role.Tab, onClick = onClick).padding(vertical = 8.dp).semantics { contentDescription = "Filter kategori $label" })
 }
 
 @Composable private fun ProductCard(product: MarketplaceProduct, onClick: (MarketplaceProduct) -> Unit) {
@@ -171,7 +216,7 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 }
 
 @Composable private fun ProductDetailScreen(product: MarketplaceProduct, onBack: () -> Unit, onAdd: () -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) {
         RematerialTopBar("Detail karya", onBack = onBack)
         LazyColumn(contentPadding = PaddingValues(bottom = 28.dp)) {
             item {
@@ -187,12 +232,12 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 @Composable private fun DetailLine(title: String, value: String) { Column(Modifier.padding(bottom = 17.dp)) { Text(title, style = MaterialTheme.typography.labelLarge, color = RematerialColors.Muted); Spacer(Modifier.height(5.dp)); Text(value, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Ink) } }
 
 @Composable private fun CartScreen(lines: List<CartLine>, prompt: Boolean, onPlus: (String, Int) -> Unit, onMinus: (String, Int) -> Unit, onRemove: (String) -> Unit, onDismissPrompt: () -> Unit, onConfirmSwitch: () -> Unit, onCheckout: () -> Unit, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) {
         RematerialTopBar("Keranjang", onBack = onBack)
         if (lines.isEmpty()) { Spacer(Modifier.height(46.dp)); Text("Keranjang masih kosong.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Simpan karya yang ingin kamu bawa pulang.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted); return@Column }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(top = 18.dp, bottom = 18.dp)) { items(lines, key = { it.product.id }) { line -> CartLineRow(line, onPlus, onMinus, onRemove) } }
         if (prompt) {
-            Surface(Modifier.fillMaxWidth().padding(bottom = 12.dp), color = RematerialColors.BronzeSoft, border = BorderStroke(1.dp, RematerialColors.Bronze), shape = RoundedCornerShape(12.dp)) { Column(Modifier.padding(14.dp)) { Text("Karya ini dari studio lain.", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(4.dp)); Text("Keranjang hanya bisa berisi satu studio agar pengiriman tetap sederhana.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("Batal", Modifier.clickable(onClick = onDismissPrompt).padding(10.dp), style = MaterialTheme.typography.labelLarge); Text("Ganti studio", Modifier.clickable(onClick = onConfirmSwitch).padding(10.dp), style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest) } } }
+            Surface(Modifier.fillMaxWidth().padding(bottom = 12.dp), color = RematerialColors.BronzeSoft, border = BorderStroke(1.dp, RematerialColors.Bronze), shape = RoundedCornerShape(12.dp)) { Column(Modifier.padding(14.dp)) { Text("Karya ini dari studio lain.", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(4.dp)); Text("Keranjang hanya bisa berisi satu studio agar pengiriman tetap sederhana.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("Batal", Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = onDismissPrompt).padding(10.dp), style = MaterialTheme.typography.labelLarge); Text("Ganti studio", Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = onConfirmSwitch).padding(10.dp), style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest) } } }
         }
         val total = lines.sumOf { it.product.price * it.quantity }
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text("Total", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(rupiah(total), style = MaterialTheme.typography.titleLarge, color = RematerialColors.DeepForest) }
@@ -204,26 +249,64 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Image(painterResource(line.product.imageRes), line.product.title, Modifier.size(76.dp).clip(RoundedCornerShape(10.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
         Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(line.product.title, style = MaterialTheme.typography.titleMedium); Text(rupiah(line.product.price), style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Spacer(Modifier.height(8.dp)); Row(verticalAlignment = Alignment.CenterVertically) { SmallIcon(RematerialIcons.Minus, "Kurangi") { onMinus(line.product.id, line.quantity) }; Text("  ${line.quantity}  ", style = MaterialTheme.typography.labelLarge); SmallIcon(RematerialIcons.Plus, "Tambah") { onPlus(line.product.id, line.quantity) } } }
-        Text("Hapus", style = MaterialTheme.typography.labelSmall, color = RematerialColors.Muted, modifier = Modifier.clickable(onClick = { onRemove(line.product.id) }).padding(8.dp))
+        Text("Hapus", style = MaterialTheme.typography.labelSmall, color = RematerialColors.Muted, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable(onClick = { onRemove(line.product.id) }).padding(8.dp))
     }
 }
 
-@Composable private fun SmallIcon(icon: Int, description: String, onClick: () -> Unit) { Box(Modifier.size(32.dp).clip(CircleShape).background(RematerialColors.Surface).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }, contentAlignment = Alignment.Center) { RematerialIcon(icon, description, Modifier.size(16.dp), RematerialColors.DeepForest) } }
+@Composable private fun SmallIcon(icon: Int, description: String, onClick: () -> Unit) { Box(Modifier.size(RematerialDockMetrics.minHitTarget).clip(CircleShape).background(RematerialColors.Surface).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }, contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(16.dp), RematerialColors.DeepForest) } }
 
 @Composable private fun CheckoutScreen(lines: List<CartLine>, onPlace: (CheckoutDraft) -> Unit, onBack: () -> Unit) {
     var address by rememberSaveable { mutableStateOf("Jl. Riau No. 18, Bandung") }; var delivery by rememberSaveable { mutableStateOf("Reguler · 2–4 hari") }; var payment by rememberSaveable { mutableStateOf("Transfer bank demo") }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) {
         RematerialTopBar("Checkout", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 28.dp)) { item { Spacer(Modifier.height(18.dp)); Text("Hampir selesai.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Semua pilihan di bawah masih demo dan belum terhubung ke pembayaran nyata.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialField(address, { address = it }, "Alamat pengiriman"); Spacer(Modifier.height(18.dp)); SelectionField("Pengiriman", delivery, listOf("Reguler · 2–4 hari", "Ekonomis · 4–7 hari")) { delivery = it }; Spacer(Modifier.height(18.dp)); SelectionField("Metode pembayaran", payment, listOf("Transfer bank demo", "Dompet digital demo")) { payment = it }; Spacer(Modifier.height(20.dp)); Text("Ringkasan pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(8.dp)); lines.forEach { Text("${it.quantity}× ${it.product.title}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp)) }; Spacer(Modifier.height(20.dp)); RematerialButton("Buat pesanan", { onPlace(CheckoutDraft(address, delivery, payment)) }, Modifier.fillMaxWidth(), enabled = address.isNotBlank(), leadingIcon = RematerialIcons.Check) } }
     }
 }
 
-@Composable private fun SelectionField(title: String, selected: String, options: List<String>, onSelect: (String) -> Unit) { Column { Text(title, style = MaterialTheme.typography.labelMedium, color = RematerialColors.Muted); Spacer(Modifier.height(8.dp)); options.forEach { option -> Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton) { onSelect(option) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (option == selected) RematerialIcons.CircleCheck else RematerialIcons.Circle, null, Modifier.size(20.dp), if (option == selected) RematerialColors.DeepForest else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(option, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Ink) } } } }
+@Composable private fun SelectionField(title: String, selected: String, options: List<String>, onSelect: (String) -> Unit) { Column { Text(title, style = MaterialTheme.typography.labelMedium, color = RematerialColors.Muted); Spacer(Modifier.height(8.dp)); options.forEach { option -> Row(Modifier.fillMaxWidth().sizeIn(minHeight = 48.dp).clickable(role = Role.RadioButton) { onSelect(option) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (option == selected) RematerialIcons.CircleCheck else RematerialIcons.Circle, null, Modifier.size(20.dp), if (option == selected) RematerialColors.DeepForest else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(option, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Ink) } } } }
 
-@Composable private fun OrderSuccessScreen(order: MarketplaceOrder?, onHome: () -> Unit, onOrders: () -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 36.dp)) { RematerialIcon(RematerialIcons.CircleCheck, null, Modifier.size(34.dp), RematerialColors.DeepForest); Spacer(Modifier.height(26.dp)); Text("Pesanan dibuat.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Karya pilihanmu akan diproses oleh studio dengan tenang.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); order?.let { DetailLine("Nomor pesanan", it.id); DetailLine("Total", rupiah(it.total)); DetailLine("Studio", it.lines.firstOrNull()?.product?.seller?.name.orEmpty()) }; Spacer(Modifier.height(16.dp)); RematerialButton("Lihat pesanan", onOrders, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Receipt); Spacer(Modifier.height(10.dp)); RematerialButton("Kembali ke pasar", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) } }
+@Composable private fun OrderSuccessScreen(order: MarketplaceOrder?, onHome: () -> Unit, onOrders: () -> Unit) { LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 36.dp, bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()))) { item { RematerialIcon(RematerialIcons.CircleCheck, null, Modifier.size(34.dp), RematerialColors.DeepForest); Spacer(Modifier.height(26.dp)); Text("Pesanan dibuat.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Karya pilihanmu akan diproses oleh studio dengan tenang.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); order?.let { DetailLine("Nomor pesanan", it.id); DetailLine("Total", rupiah(it.total)); DetailLine("Studio", it.lines.firstOrNull()?.product?.seller?.name.orEmpty()) }; Spacer(Modifier.height(16.dp)); RematerialButton("Lihat pesanan", onOrders, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Receipt); Spacer(Modifier.height(10.dp)); RematerialButton("Kembali ke pasar", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) } } }
 
-@Composable private fun OrderHistoryScreen(orders: List<MarketplaceOrder>, onBack: () -> Unit, onOpen: (MarketplaceOrder) -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Pesanan", onBack = onBack); Spacer(Modifier.height(18.dp)); Text("Perjalanan belanjamu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Riwayat pesanan dari studio yang kamu pilih.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) { items(orders, key = { it.id }) { order -> Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(order) }, color = RematerialColors.Surface, border = BorderStroke(1.dp, RematerialColors.Line), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(16.dp)) { Row { Text(order.id, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(order.status.label, style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest) }; Spacer(Modifier.height(6.dp)); Text(order.lines.joinToString { "${it.quantity}× ${it.product.title}" }, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Spacer(Modifier.height(8.dp)); Text(rupiah(order.total), style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink) } } } } } }
+@Composable
+private fun OrderHistoryScreen(
+    orders: List<MarketplaceOrder>,
+    onBack: () -> Unit,
+    onOpen: (MarketplaceOrder) -> Unit,
+    dockVisible: Boolean,
+) {
+    val bottom = RematerialDockMetrics.screenBottomPadding(
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        dockVisible,
+    )
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = bottom)) {
+        RematerialTopBar("Pesanan", onBack = onBack)
+        Spacer(Modifier.height(18.dp))
+        Text("Perjalanan belanjamu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
+        Spacer(Modifier.height(8.dp))
+        Text("Riwayat pesanan dari studio yang kamu pilih.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+        Spacer(Modifier.height(22.dp))
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(orders, key = { it.id }) { order ->
+                Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(order) }, color = RematerialColors.Surface, border = BorderStroke(1.dp, RematerialColors.Line), shape = RoundedCornerShape(14.dp)) {
+                    Column(Modifier.padding(16.dp)) { Row { Text(order.id, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(order.status.label, style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest) }; Spacer(Modifier.height(6.dp)); Text(order.lines.joinToString { "${it.quantity}× ${it.product.title}" }, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Spacer(Modifier.height(8.dp)); Text(rupiah(order.total), style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink) }
+                }
+            }
+        }
+    }
+}
 
-@Composable private fun OrderDetailScreen(order: MarketplaceOrder, onBack: () -> Unit) { Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp)) { RematerialTopBar("Detail pesanan", onBack = onBack); LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) { item { Spacer(Modifier.height(18.dp)); Text(order.id, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text(order.createdLabel, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(24.dp)); OrderTimeline(order.status); Spacer(Modifier.height(26.dp)); DetailLine("Dikirim ke", order.address); DetailLine("Pengiriman", order.delivery); DetailLine("Pembayaran", order.payment); DetailLine("Total", rupiah(order.total)) } } } }
+@Composable
+private fun OrderDetailScreen(order: MarketplaceOrder, onBack: () -> Unit, dockVisible: Boolean) {
+    val bottom = RematerialDockMetrics.screenBottomPadding(
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        dockVisible,
+    )
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = bottom)) {
+        RematerialTopBar("Detail pesanan", onBack = onBack)
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+            item { Spacer(Modifier.height(18.dp)); Text(order.id, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text(order.createdLabel, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(24.dp)); OrderTimeline(order.status); Spacer(Modifier.height(26.dp)); DetailLine("Dikirim ke", order.address); DetailLine("Pengiriman", order.delivery); DetailLine("Pembayaran", order.payment); DetailLine("Total", rupiah(order.total)) }
+        }
+    }
+}
 
 @Composable private fun OrderTimeline(status: OrderStatus) { Column { Text("Status pesanan", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); OrderStatus.entries.forEach { item -> Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(if (item.ordinal <= status.ordinal) RematerialIcons.CircleCheck else RematerialIcons.CircleCheck, null, Modifier.size(19.dp), if (item.ordinal <= status.ordinal) RematerialColors.DeepForest else RematerialColors.Line); Spacer(Modifier.width(10.dp)); Text(item.label, style = MaterialTheme.typography.bodyMedium, color = if (item.ordinal <= status.ordinal) RematerialColors.Ink else RematerialColors.Muted) } } } }
 
@@ -233,17 +316,15 @@ fun UserAccountRoute(
     onAnalysis: () -> Unit,
     onProduction: () -> Unit,
     onOrders: () -> Unit,
-    onDestinationSelected: (DockDestination) -> Unit,
     onLogout: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
-            contentPadding = PaddingValues(bottom = RematerialDockMetrics.reservedBottom + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
         ) {
             item { RematerialTopBar("Akun", onBack = onBack); Spacer(Modifier.height(22.dp)); Text("Dika", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text("user@rematerial.demo", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); Text("Ruangmu", style = MaterialTheme.typography.titleLarge); AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis); AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction); AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders); Spacer(Modifier.height(24.dp)); Text("Akun siap digunakan.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(24.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut) }
         }
-        RematerialDock(DockDestination.Akun, onDestinationSelected, Modifier.align(Alignment.BottomCenter))
     }
 }
 
