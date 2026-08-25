@@ -53,6 +53,7 @@ import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialTopBar
 import com.rematerial.app.feature.identity.domain.ContactPreference
 import com.rematerial.app.feature.identity.domain.Role
+import com.rematerial.app.feature.identity.domain.VerificationDocumentKind
 
 @Composable
 fun IdentityEntryScreen(
@@ -165,11 +166,20 @@ private fun LoginScreen(
     val roleTitle = roleOptions.first { it.role == state.role }.title
     val context = LocalContext.current
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        onEvent(IdentityEvent.LocationPermissionChanged(result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true))
+        onEvent(IdentityEvent.LocationPermissionChanged(result[Manifest.permission.ACCESS_COARSE_LOCATION] == true))
+    }
+    val ktpLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { onEvent(IdentityEvent.VerificationDocumentSelected(VerificationDocumentKind.KTP, it.toString())) }
+    }
+    val selfieLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { onEvent(IdentityEvent.VerificationDocumentSelected(VerificationDocumentKind.SELFIE, it.toString())) }
+    }
+    val evidenceKind = if (state.role == Role.ARTISAN) VerificationDocumentKind.PORTFOLIO else VerificationDocumentKind.STORE_EVIDENCE
+    val evidenceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { onEvent(IdentityEvent.VerificationDocumentSelected(evidenceKind, it.toString())) }
     }
     LaunchedEffect(Unit) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (granted) onEvent(IdentityEvent.LocationPermissionChanged(true))
     }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -237,13 +247,22 @@ private fun LoginScreen(
                     Spacer(Modifier.height(12.dp))
                     RematerialButton(
                         "Gunakan lokasi saya",
-                        { locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)) },
+                        { locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)) },
                         Modifier.fillMaxWidth(),
-                        enabled = !state.locationPermissionGranted,
+                        enabled = !state.isResolvingLocation,
                         leadingIcon = RematerialIcons.MapPin,
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(if (state.locationPermissionGranted) "Lokasi perangkat siap digunakan." else "Belum ada lokasi perangkat.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                    Text(
+                        when {
+                            state.isResolvingLocation -> "Mencari perkiraan lokasi perangkat…"
+                            state.latitude != null -> "Perkiraan lokasi perangkat berhasil dibaca."
+                            state.locationPermissionGranted -> "Izin tersedia, tetapi koordinat belum terbaca. Isi area manual bila perlu."
+                            else -> "Belum ada lokasi perangkat."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RematerialColors.Muted,
+                    )
                     Spacer(Modifier.height(12.dp))
                     RematerialField(state.area, { onEvent(IdentityEvent.AreaChanged(it)) }, "Area atau kota", placeholder = "Contoh: Bandung", keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Next))
                     Spacer(Modifier.height(12.dp))
@@ -251,6 +270,24 @@ private fun LoginScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
+            if (state.role != Role.USER) {
+                Text("Verifikasi ${if (state.role == Role.ARTISAN) "pengrajin" else "penjual"}", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                Spacer(Modifier.height(8.dp))
+                Text("Dokumen disalin ke penyimpanan privat aplikasi dan akun baru akan berstatus menunggu verifikasi.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                Spacer(Modifier.height(14.dp))
+                RematerialField(
+                    state.nik,
+                    { onEvent(IdentityEvent.NikChanged(it)) },
+                    "NIK",
+                    placeholder = "16 digit NIK",
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+                Spacer(Modifier.height(10.dp))
+                VerificationDocumentRow("Foto KTP", state.ktpPrivatePath != null) { ktpLauncher.launch(arrayOf("image/*")) }
+                VerificationDocumentRow("Foto selfie", state.selfiePrivatePath != null) { selfieLauncher.launch(arrayOf("image/*")) }
+                VerificationDocumentRow(if (state.role == Role.ARTISAN) "Foto portofolio" else "Bukti toko", state.roleEvidencePrivatePath != null) { evidenceLauncher.launch(arrayOf("image/*")) }
+                Spacer(Modifier.height(16.dp))
+            }
         }
         RematerialField(
             value = state.email,
@@ -321,5 +358,21 @@ private fun LoginScreen(
                     .padding(8.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun VerificationDocumentRow(title: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(role = SemanticsRole.Button, onClick = onClick).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RematerialIcon(RematerialIcons.Upload, null, Modifier.size(20.dp), RematerialColors.DeepForest)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+            Text(if (selected) "Tersimpan privat" else "Pilih foto", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+        }
+        RematerialIcon(if (selected) RematerialIcons.Check else RematerialIcons.ChevronRight, null, Modifier.size(18.dp), RematerialColors.Bronze)
     }
 }

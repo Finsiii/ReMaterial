@@ -13,6 +13,7 @@ import com.rematerial.app.feature.identity.domain.RegistrationRequest
 import org.junit.Test
 import com.rematerial.app.feature.identity.domain.ContactProfile
 import com.rematerial.app.feature.identity.domain.LocationProfile
+import com.rematerial.app.feature.identity.domain.VerificationDocuments
 
 class IdentityViewModelTest {
     @Test
@@ -25,6 +26,12 @@ class IdentityViewModelTest {
                 contact = ContactProfile("081234567890"),
                 location = LocationProfile("Bandung"),
                 role = Role.ARTISAN,
+                verification = VerificationDocuments(
+                    nik = "3273010101010001",
+                    ktpPrivatePath = "/private/ktp.jpg",
+                    selfiePrivatePath = "/private/selfie.jpg",
+                    portfolioPrivatePaths = listOf("/private/portfolio.jpg"),
+                ),
             ),
         )
 

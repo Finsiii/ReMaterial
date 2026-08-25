@@ -16,6 +16,7 @@ import com.rematerial.app.feature.analysis.domain.AnalysisSession
 import com.rematerial.app.feature.analysis.domain.AnalysisPersistenceSnapshot
 import com.rematerial.app.feature.analysis.domain.AnalysisSessionRepository
 import com.rematerial.app.feature.analysis.domain.SavedAnalysisIdea
+import com.rematerial.app.feature.identity.domain.SessionStore
 import java.io.IOException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -42,6 +43,9 @@ interface AnalysisStateDao {
     @Query("SELECT * FROM analysis_state WHERE recordType = :type ORDER BY updatedAtEpochMs DESC")
     suspend fun byType(type: String): List<AnalysisStateEntity>
 
+    @Query("SELECT * FROM analysis_state WHERE recordId LIKE :ownerPrefix || '%' ORDER BY updatedAtEpochMs DESC")
+    suspend fun byOwner(ownerPrefix: String): List<AnalysisStateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: AnalysisStateEntity)
 
@@ -60,55 +64,76 @@ abstract class AnalysisDatabase : RoomDatabase() {
 class RoomAnalysisSessionRepository(
     private val database: AnalysisDatabase,
     private val json: Json,
+    private val sessions: SessionStore,
 ) : AnalysisSessionRepository {
     private val dao get() = database.analysisStateDao()
 
-    override suspend fun loadSnapshot(): Result<AnalysisPersistenceSnapshot> = read {
-        val rows = dao.all()
-        val session = rows.firstOrNull { it.recordId == SESSION_ID }?.payload?.let {
+    override suspend fun loadSnapshot(): Result<AnalysisPersistenceSnapshot> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return read {
+        val rows = dao.byOwner(owner)
+        val session = rows.firstOrNull { it.recordId == owner + SESSION_ID }?.payload?.let {
             json.decodeFromString(AnalysisSession.serializer(), it)
         }
         val ideas = rows.filter { it.recordType == TYPE_IDEA }.sortedByDescending(AnalysisStateEntity::updatedAtEpochMs).map {
             json.decodeFromString(SavedAnalysisIdea.serializer(), it.payload)
         }
-        AnalysisPersistenceSnapshot(session, ideas, rows.mapNotNullTo(linkedSetOf(), AnalysisStateEntity::mediaPath))
+        AnalysisPersistenceSnapshot(session, ideas, dao.referencedMediaPaths().toSet())
+        }
     }
 
-    override suspend fun loadSession(): Result<AnalysisSession?> = read {
-        dao.find(SESSION_ID)?.payload?.let { json.decodeFromString(AnalysisSession.serializer(), it) }
+    override suspend fun loadSession(): Result<AnalysisSession?> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return read {
+        dao.find(owner + SESSION_ID)?.payload?.let { json.decodeFromString(AnalysisSession.serializer(), it) }
+        }
     }
 
-    override suspend fun saveSession(session: AnalysisSession): Result<Unit> = write {
+    override suspend fun saveSession(session: AnalysisSession): Result<Unit> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return write {
         dao.upsert(
             AnalysisStateEntity(
-                SESSION_ID,
+                owner + SESSION_ID,
                 TYPE_SESSION,
                 json.encodeToString(AnalysisSession.serializer(), session),
                 session.photo?.privatePath,
                 System.currentTimeMillis(),
             ),
         )
+        }
     }
 
-    override suspend fun clearSession(): Result<Unit> = write { dao.delete(SESSION_ID) }
+    override suspend fun clearSession(): Result<Unit> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return write { dao.delete(owner + SESSION_ID) }
+    }
 
-    override suspend fun saveIdea(idea: SavedAnalysisIdea): Result<Unit> = write {
+    override suspend fun saveIdea(idea: SavedAnalysisIdea): Result<Unit> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return write {
         dao.upsert(
             AnalysisStateEntity(
-                "idea:${idea.analysisId.value}:${idea.optionId.value}",
+                "${owner}idea:${idea.analysisId.value}:${idea.optionId.value}",
                 TYPE_IDEA,
                 json.encodeToString(SavedAnalysisIdea.serializer(), idea),
                 idea.photo?.privatePath,
                 System.currentTimeMillis(),
             ),
         )
+        }
     }
 
-    override suspend fun savedIdeas(): Result<List<SavedAnalysisIdea>> = read {
-        dao.byType(TYPE_IDEA).map { json.decodeFromString(SavedAnalysisIdea.serializer(), it.payload) }
+    override suspend fun savedIdeas(): Result<List<SavedAnalysisIdea>> {
+        val owner = ownerPrefix() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return read {
+        dao.byOwner(owner).filter { it.recordType == TYPE_IDEA }.map { json.decodeFromString(SavedAnalysisIdea.serializer(), it.payload) }
+        }
     }
 
     suspend fun referencedMediaPaths(): Set<String> = dao.referencedMediaPaths().toSet()
+
+    private fun ownerPrefix(): String? = sessions.current()?.accountId?.value?.let { "account:$it:" }
 
     private suspend fun <T> read(block: suspend () -> T): Result<T> = try {
         Result.Success(block())

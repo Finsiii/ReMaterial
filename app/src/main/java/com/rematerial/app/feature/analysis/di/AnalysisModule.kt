@@ -11,6 +11,7 @@ import com.rematerial.app.feature.analysis.data.AnalysisDatabase
 import com.rematerial.app.feature.analysis.data.RoomAnalysisSessionRepository
 import com.rematerial.app.feature.analysis.domain.AiAnalysisGateway
 import com.rematerial.app.feature.analysis.domain.AnalysisSessionRepository
+import com.rematerial.app.feature.identity.domain.SessionStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,6 +40,6 @@ object AnalysisModule {
 
     @Provides
     @Singleton
-    fun provideAnalysisSessionRepository(database: AnalysisDatabase): AnalysisSessionRepository =
-        RoomAnalysisSessionRepository(database, Json { ignoreUnknownKeys = false; explicitNulls = false; encodeDefaults = true })
+    fun provideAnalysisSessionRepository(database: AnalysisDatabase, sessions: SessionStore): AnalysisSessionRepository =
+        RoomAnalysisSessionRepository(database, Json { ignoreUnknownKeys = false; explicitNulls = false; encodeDefaults = true }, sessions)
 }
