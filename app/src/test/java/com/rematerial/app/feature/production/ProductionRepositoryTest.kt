@@ -17,10 +17,10 @@ class ProductionRepositoryTest {
             ProductionRequestInput(
                 artisanId = "artisan-bima",
                 draft = ProductDraft(),
-                quantity = "1 unit",
+                quantity = 1,
                 notes = "",
                 address = "Jl. Demo 1",
-                targetDate = "20 September 2026",
+                targetDateIso = "2026-09-20",
                 phone = "081234567890",
             ),
         )
@@ -41,10 +41,10 @@ class ProductionRepositoryTest {
                     analysisId = "analysis-demo",
                     safetyAllowed = true,
                 ),
-                quantity = "1 unit",
+                quantity = 1,
                 notes = "",
                 address = "Jl. Demo 1",
-                targetDate = "20 September 2026",
+                targetDateIso = "2026-09-20",
                 phone = "081234567890",
             ),
         )

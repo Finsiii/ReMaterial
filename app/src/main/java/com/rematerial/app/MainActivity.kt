@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,6 +40,7 @@ import com.rematerial.app.feature.production.presentation.ProductionViewModel
 import com.rematerial.app.feature.marketplace.presentation.MarketplaceRoute
 import com.rematerial.app.feature.marketplace.presentation.MarketplaceOrdersRoute
 import com.rematerial.app.feature.marketplace.presentation.UserAccountRoute
+import com.rematerial.app.feature.marketplace.domain.BuyerContext
 import com.rematerial.app.feature.seller.presentation.SellerWorkspaceRoute
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -74,10 +77,14 @@ private fun ReMaterialNavHost() {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val identityViewModel: IdentityViewModel = hiltViewModel()
     val productionViewModel: ProductionViewModel = hiltViewModel()
+    val identityState by identityViewModel.state.collectAsStateWithLifecycle()
+    val productionState by productionViewModel.state.collectAsStateWithLifecycle()
+    val session = identityState.session
+    LaunchedEffect(session) { productionViewModel.applySession(session) }
     Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = Routes.Identity,
+            startDestination = session?.role?.route() ?: Routes.Identity,
             enterTransition = {
                 slideIntoContainer(
                     userRouteMotion(initialState.destination.route, targetState.destination.route).slideDirection,
@@ -115,6 +122,10 @@ private fun ReMaterialNavHost() {
         }
         composable(Routes.UserHome) {
             UserHomeScreen(
+                displayName = session?.displayName.orEmpty(),
+                area = session?.location?.area.orEmpty(),
+                latestRequest = productionState.requests.firstOrNull(),
+                nearbyArtisan = productionState.artisans.firstOrNull(),
                 onScan = { navController.navigateUserDestination(Routes.Analysis) },
                 onProduction = { navController.navigateUserDestination(Routes.Production) },
                 onArtisans = { navController.navigateUserDestination(Routes.Production) },
@@ -132,6 +143,11 @@ private fun ReMaterialNavHost() {
                             minimumQuantity = "${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
                             analysisId = analysisId.value,
                             safetyAllowed = safetyOutcome != SafetyOutcome.BLOCK,
+                            requiredCapabilities = capabilityKeys(option.requiredMaterial),
+                            requiredTools = option.requiredToolIds,
+                            requiredSkills = option.requiredSkillIds,
+                            provisionalScore = option.provisionalProductScore,
+                            estimatedUsage = "${option.estimatedUsedQuantity} ${option.estimatedUsedUnit.name.lowercase()}",
                         ),
                     )
                     navController.navigateUserDestination(Routes.Production)
@@ -145,23 +161,28 @@ private fun ReMaterialNavHost() {
             )
         }
         composable(Routes.Market) {
-            MarketplaceRoute()
+            MarketplaceRoute(
+                BuyerContext(session?.displayName.orEmpty(), session?.contact?.whatsapp.orEmpty()),
+                session?.location?.address.orEmpty(),
+            )
         }
         composable(Routes.Account) {
-            UserAccountRoute(
+            session?.let { activeSession -> UserAccountRoute(
+                session = activeSession,
                 onBack = { navController.popBackStack() },
                 onAnalysis = { navController.navigate(Routes.Analysis) },
                 onProduction = { navController.navigate(Routes.Production) },
                 onOrders = { navController.navigate(Routes.Orders) },
                 onLogout = { returnToIdentity(navController, identityViewModel) },
-            )
+                onUpdateLocation = { area, address -> identityViewModel.onEvent(IdentityEvent.UpdateSessionLocation(area, address)) },
+            ) }
         }
         composable(Routes.Orders) { MarketplaceOrdersRoute(onBack = { navController.popBackStack() }) }
         composable(Routes.ArtisanWorkspace) {
-            ArtisanWorkspaceRoute(onLogout = { returnToIdentity(navController, identityViewModel) })
+            session?.let { ArtisanWorkspaceRoute(it, onLogout = { returnToIdentity(navController, identityViewModel) }) }
         }
         composable(Routes.SellerWorkspace) {
-            SellerWorkspaceRoute(onLogout = { returnToIdentity(navController, identityViewModel) })
+            session?.let { SellerWorkspaceRoute(it, onLogout = { returnToIdentity(navController, identityViewModel) }) }
         }
         }
         userDockDestination(currentBackStackEntry?.destination?.route)?.let { selected ->
@@ -188,8 +209,14 @@ private fun Role.route(): String = when (this) {
 }
 
 private fun returnToIdentity(navController: NavHostController, viewModel: IdentityViewModel) {
-    viewModel.onEvent(IdentityEvent.SignOut)
-    navController.navigate(Routes.Identity) { popUpTo(0) }
+    viewModel.signOut(
+        onSuccess = {
+            navController.navigate(Routes.Identity) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        },
+    )
 }
 
 private fun NavHostController.navigateUserDestination(route: String) {
@@ -233,3 +260,12 @@ internal fun userTabIndex(route: String?): Int = when (route) {
 
 internal fun userRouteMotion(initialRoute: String?, targetRoute: String?): HorizontalPageMotion =
     horizontalPageMotion(userTabIndex(initialRoute), userTabIndex(targetRoute))
+
+private fun capabilityKeys(material: String): List<String> = when {
+    material.contains("kabel", true) || material.contains("cable", true) -> listOf("cable")
+    material.contains("metal", true) || material.contains("logam", true) -> listOf("metal")
+    material.contains("kayu", true) || material.contains("wood", true) -> listOf("wood")
+    material.contains("tekstil", true) || material.contains("textile", true) -> listOf("textile")
+    material.contains("plastik", true) || material.contains("plastic", true) -> listOf("plastic")
+    else -> emptyList()
+}

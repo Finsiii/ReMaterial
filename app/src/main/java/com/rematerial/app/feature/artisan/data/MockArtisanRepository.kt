@@ -3,40 +3,65 @@ package com.rematerial.app.feature.artisan.data
 import com.rematerial.app.core.model.DomainFailure
 import com.rematerial.app.core.model.Result
 import com.rematerial.app.feature.artisan.domain.ArtisanJob
-import com.rematerial.app.feature.artisan.domain.ArtisanJobStatus
 import com.rematerial.app.feature.artisan.domain.ArtisanProfileDraft
 import com.rematerial.app.feature.artisan.domain.ArtisanRepository
+import com.rematerial.app.feature.identity.data.InMemorySessionStore
+import com.rematerial.app.feature.identity.domain.Role
+import com.rematerial.app.feature.identity.domain.SessionStore
+import com.rematerial.app.feature.identity.domain.VerificationStatus
+import com.rematerial.app.feature.production.data.DemoProductionStore
+import com.rematerial.app.feature.production.domain.ProductionStatus
+import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
-class MockArtisanRepository : ArtisanRepository {
-    private val jobs = MutableStateFlow(
-        listOf(
-            ArtisanJob("JOB-109", "Dika Prasetya", "Lampu meja kabel tembaga", "Kabel tembaga · 2,45 kg", "1 unit", "20 September 2026", "Jl. Merdeka 24, Bandung", "Buat kabel terlihat sebagai aksen, bukan ditutup seluruhnya.", ArtisanJobStatus.PROCESSING, "081234567890", "081234567890", "WhatsApp"),
-            ArtisanJob("JOB-108", "Nadia S.", "Rak dinding modular", "Kayu palet · 4 papan", "1 set", "24 September 2026", "Jl. Ciumbuleuit 18, Bandung", "Warna kayu natural, sudut tidak terlalu tajam.", ArtisanJobStatus.NEW, "081234567893", "081234567893", "WhatsApp"),
-            ArtisanJob("JOB-104", "Reno A.", "Organizer meja", "Aluminium bekas · 1,2 kg", "2 unit", "28 September 2026", "Jl. Buah Batu 10, Bandung", "Sisakan tekstur goresan kecil sebagai karakter.", ArtisanJobStatus.ACCEPTED, "081234567894", "081234567894", "Telepon"),
-        ),
-    )
-    private var profileDraft = ArtisanProfileDraft()
+class MockArtisanRepository @Inject constructor(
+    private val store: DemoProductionStore,
+    private val sessions: SessionStore,
+) : ArtisanRepository {
+    constructor() : this(DemoProductionStore(), InMemorySessionStore())
 
-    override fun observeJobs(): Flow<List<ArtisanJob>> = jobs.asStateFlow()
-
-    override suspend fun updateJob(id: String, status: ArtisanJobStatus): Result<ArtisanJob> {
-        val job = jobs.value.firstOrNull { it.id == id } ?: return Result.Failure(DomainFailure.Unavailable)
-        val allowed = when (job.status) {
-            ArtisanJobStatus.NEW -> status == ArtisanJobStatus.ACCEPTED || status == ArtisanJobStatus.REVISION
-            ArtisanJobStatus.ACCEPTED -> status == ArtisanJobStatus.PROCESSING || status == ArtisanJobStatus.REVISION
-            ArtisanJobStatus.REVISION -> status == ArtisanJobStatus.ACCEPTED
-            ArtisanJobStatus.PROCESSING -> status == ArtisanJobStatus.COMPLETED || status == ArtisanJobStatus.REVISION
-            ArtisanJobStatus.COMPLETED -> false
-        }
-        if (!allowed) return Result.Failure(DomainFailure.Validation(listOf("Status pekerjaan harus berurutan.")))
-        val updated = job.copy(status = status)
-        jobs.value = jobs.value.map { if (it.id == id) updated else it }
-        return Result.Success(updated)
+    private val profileDrafts = MutableStateFlow<Map<String, ArtisanProfileDraft>>(emptyMap())
+    private fun artisanId(): String? = sessions.current()?.let {
+        if (it.role != Role.ARTISAN) null else if (it.accountId.value == "demo-artisan") "artisan-bima" else it.accountId.value
     }
 
-    override fun profile(): ArtisanProfileDraft = profileDraft
-    override fun saveProfile(profile: ArtisanProfileDraft) { profileDraft = profile }
+    override fun observeJobs(): Flow<List<ArtisanJob>> = store.requests.map { requests ->
+        val id = artisanId()
+        requests.filter { it.artisan.id == id }.map { request ->
+            ArtisanJob(
+                request.id, request.customerName, request.draft.title, request.draft.materialSummary,
+                request.quantity, request.targetDateIso, request.address, request.notes, request.status,
+                request.phone, request.whatsapp, request.preferredContact,
+                request.draft.requiredCapabilities, request.draft.requiredTools, request.draft.requiredSkills,
+                request.draft.provisionalScore, request.draft.estimatedUsage,
+            )
+        }
+    }
+
+    override suspend fun updateJob(id: String, status: ProductionStatus): Result<ArtisanJob> {
+        val session = sessions.current()
+        if (session?.role != Role.ARTISAN || session.verificationStatus != VerificationStatus.APPROVED) {
+            return Result.Failure(DomainFailure.Unauthorized)
+        }
+        val artisanId = artisanId() ?: return Result.Failure(DomainFailure.Unauthorized)
+        return when (val result = store.transition(id, status, artisanId)) {
+            is Result.Failure -> result
+            is Result.Success -> Result.Success(
+                ArtisanJob(
+                    result.value.id, result.value.customerName, result.value.draft.title, result.value.draft.materialSummary,
+                    result.value.quantity, result.value.targetDateIso, result.value.address, result.value.notes, result.value.status,
+                    result.value.phone, result.value.whatsapp, result.value.preferredContact,
+                    result.value.draft.requiredCapabilities, result.value.draft.requiredTools, result.value.draft.requiredSkills,
+                    result.value.draft.provisionalScore, result.value.draft.estimatedUsage,
+                ),
+            )
+        }
+    }
+
+    override fun profile(): ArtisanProfileDraft = artisanId()?.let { profileDrafts.value[it] } ?: ArtisanProfileDraft()
+    override fun saveProfile(profile: ArtisanProfileDraft) {
+        artisanId()?.let { id -> profileDrafts.value = profileDrafts.value + (id to profile) }
+    }
 }

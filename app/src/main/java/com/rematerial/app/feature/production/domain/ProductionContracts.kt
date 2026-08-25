@@ -13,6 +13,11 @@ data class ProductDraft(
     val minimumQuantity: String = "",
     val analysisId: String? = null,
     val safetyAllowed: Boolean = true,
+    val requiredCapabilities: List<String> = emptyList(),
+    val requiredTools: List<String> = emptyList(),
+    val requiredSkills: List<String> = emptyList(),
+    val provisionalScore: Double = 0.0,
+    val estimatedUsage: String = "",
 )
 
 fun ProductDraft.isReadyForProduction(): Boolean =
@@ -42,39 +47,49 @@ data class ArtisanProfile(
     val responseTime: String = "Balas dalam 1 jam",
     val workingHours: String = "Senin–Sabtu · 09.00–17.00",
     val verifiedState: String = "Identitas dan portofolio telah diverifikasi",
+    val capabilityKeys: Set<String> = emptySet(),
+    val toolKeys: Set<String> = emptySet(),
+    val skillKeys: Set<String> = emptySet(),
+    val verified: Boolean = true,
 )
 
 @Serializable
 data class ProductionRequest(
     val id: String,
+    val ownerAccountId: String = "demo-user",
     val artisan: ArtisanProfile,
     val draft: ProductDraft,
-    val quantity: String,
+    val quantity: Int,
     val notes: String,
     val address: String,
-    val targetDate: String,
+    val targetDateIso: String,
     val phone: String = "",
     val whatsapp: String = "",
     val preferredContact: String = "WhatsApp",
     val status: ProductionStatus = ProductionStatus.SUBMITTED,
+    val customerName: String = "Pengguna",
 )
 
 @Serializable
 enum class ProductionStatus(val label: String, val progress: Float) {
-    SUBMITTED("Permintaan diterima", 0.2f),
-    REVIEW("Sedang ditinjau pengrajin", 0.4f),
-    PROCESSING("Sedang dikerjakan", 0.7f),
-    READY("Siap dikirim", 1f),
+    SUBMITTED("Permintaan dikirim", 0.12f),
+    NEEDS_CLARIFICATION("Perlu penjelasan", 0.22f),
+    ACCEPTED("Diterima pengrajin", 0.36f),
+    IN_PRODUCTION("Sedang dikerjakan", 0.68f),
+    READY_FOR_REVIEW("Siap diperiksa", 0.9f),
+    REVISION_REQUESTED("Perlu revisi", 0.68f),
+    COMPLETED("Selesai", 1f),
+    CANCELLED("Dibatalkan", 0f),
 }
 
 @Serializable
 data class ProductionRequestInput(
     val artisanId: String,
     val draft: ProductDraft,
-    val quantity: String,
+    val quantity: Int,
     val notes: String,
     val address: String,
-    val targetDate: String,
+    val targetDateIso: String,
     val phone: String = "",
     val whatsapp: String = "",
     val preferredContact: String = "WhatsApp",
@@ -87,4 +102,7 @@ interface ProductionRepository {
     suspend fun submit(input: ProductionRequestInput): Result<ProductionRequest>
     fun observeRequests(): Flow<List<ProductionRequest>>
     suspend fun getRequest(id: String): Result<ProductionRequest>
+    suspend fun completeRequest(id: String): Result<ProductionRequest>
+    suspend fun requestRevision(id: String): Result<ProductionRequest>
+    suspend fun cancelRequest(id: String): Result<ProductionRequest>
 }

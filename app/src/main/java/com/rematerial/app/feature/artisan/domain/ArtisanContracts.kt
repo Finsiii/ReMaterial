@@ -3,6 +3,7 @@ package com.rematerial.app.feature.artisan.domain
 import com.rematerial.app.core.model.Result
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
+import com.rematerial.app.feature.production.domain.ProductionStatus
 
 @Serializable
 data class ArtisanJob(
@@ -10,24 +11,20 @@ data class ArtisanJob(
     val customerName: String,
     val productTitle: String,
     val materialSummary: String,
-    val quantity: String,
-    val deadline: String,
+    val quantity: Int,
+    val deadlineIso: String,
     val address: String,
     val notes: String,
-    val status: ArtisanJobStatus,
+    val status: ProductionStatus,
     val customerPhone: String = "",
     val customerWhatsapp: String = "",
     val preferredContact: String = "WhatsApp",
+    val requiredCapabilities: List<String> = emptyList(),
+    val requiredTools: List<String> = emptyList(),
+    val requiredSkills: List<String> = emptyList(),
+    val provisionalScore: Double = 0.0,
+    val estimatedUsage: String = "",
 )
-
-@Serializable
-enum class ArtisanJobStatus(val label: String, val progress: Float) {
-    NEW("Permintaan baru", 0.12f),
-    ACCEPTED("Diterima", 0.28f),
-    REVISION("Menunggu revisi", 0.42f),
-    PROCESSING("Sedang dikerjakan", 0.7f),
-    COMPLETED("Selesai", 1f),
-}
 
 @Serializable
 data class ArtisanProfileDraft(
@@ -48,7 +45,7 @@ enum class ProfileSubmissionState(val label: String) {
 
 interface ArtisanRepository {
     fun observeJobs(): Flow<List<ArtisanJob>>
-    suspend fun updateJob(id: String, status: ArtisanJobStatus): Result<ArtisanJob>
+    suspend fun updateJob(id: String, status: ProductionStatus): Result<ArtisanJob>
     fun profile(): ArtisanProfileDraft
     fun saveProfile(profile: ArtisanProfileDraft)
 }

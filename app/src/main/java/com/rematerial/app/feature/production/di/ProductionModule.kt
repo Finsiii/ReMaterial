@@ -1,6 +1,8 @@
 package com.rematerial.app.feature.production.di
 
 import com.rematerial.app.feature.production.data.MockProductionRepository
+import com.rematerial.app.feature.production.data.DemoProductionStore
+import com.rematerial.app.feature.identity.domain.SessionStore
 import com.rematerial.app.feature.production.domain.ProductionRepository
 import dagger.Module
 import dagger.Provides
@@ -13,5 +15,9 @@ import javax.inject.Singleton
 object ProductionModule {
     @Provides
     @Singleton
-    fun provideProductionRepository(): ProductionRepository = MockProductionRepository()
+    fun provideProductionStore(): DemoProductionStore = DemoProductionStore()
+
+    @Provides
+    @Singleton
+    fun provideProductionRepository(store: DemoProductionStore, sessions: SessionStore): ProductionRepository = MockProductionRepository(store, sessions)
 }

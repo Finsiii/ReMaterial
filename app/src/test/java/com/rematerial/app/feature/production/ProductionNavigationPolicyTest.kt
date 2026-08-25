@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import androidx.lifecycle.ViewModelStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProductionNavigationPolicyTest {
@@ -30,12 +31,14 @@ class ProductionNavigationPolicyTest {
     fun `form back is stored as detail in view model state`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
+        val store = ViewModelStore()
         try {
             val repository = MockProductionRepository()
             val draft = ProductDraft(ProductOptionId("lampu-kabel"), "Lampu", "Tembaga", "1 unit", "analysis-1", true)
             repository.saveDraft(draft)
             val artisan = (repository.searchArtisans("") as Result.Success).value.first()
             val viewModel = ProductionViewModel(repository)
+            store.put("production", viewModel)
 
             viewModel.openDetail(artisan)
             viewModel.openForm()
@@ -43,6 +46,7 @@ class ProductionNavigationPolicyTest {
 
             assertEquals(ProductionPage.DETAIL, viewModel.state.value.page)
         } finally {
+            store.clear()
             Dispatchers.resetMain()
         }
     }

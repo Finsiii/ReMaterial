@@ -1,10 +1,13 @@
 package com.rematerial.app.feature.seller.domain
 
+import com.rematerial.app.core.commerce.CommerceResult
+import com.rematerial.app.core.commerce.ListingState
 import com.rematerial.app.feature.marketplace.domain.OrderStatus
 import kotlinx.coroutines.flow.StateFlow
 
 data class SellerListing(
     val id: String,
+    val sellerId: String = "seller-nusa",
     val title: String,
     val materialOrigin: String,
     val description: String,
@@ -14,13 +17,16 @@ data class SellerListing(
     val location: String,
     val imageUri: String? = null,
     val imageRes: Int? = null,
-    val published: Boolean = true,
+    val category: String = "Lainnya",
+    val featured: Boolean = false,
+    val state: ListingState = ListingState.DRAFT,
 )
 
 data class SellerOrder(
     val id: String,
     val productTitle: String,
     val buyerName: String,
+    val buyerWhatsapp: String,
     val quantity: Int,
     val total: Int,
     val address: String,
@@ -30,6 +36,7 @@ data class SellerOrder(
 enum class VerificationState(val label: String) { NOT_SUBMITTED("Belum dikirim"), SUBMITTED("Sedang ditinjau"), NEEDS_CORRECTION("Perlu koreksi"), VERIFIED("Terverifikasi") }
 
 data class SellerProfile(
+    val sellerId: String = "seller-nusa",
     val name: String = "Alya Studio",
     val storeName: String = "Nusa Forma",
     val location: String = "Bandung",
@@ -43,8 +50,8 @@ interface SellerRepository {
     val listings: StateFlow<List<SellerListing>>
     val orders: StateFlow<List<SellerOrder>>
     val profile: StateFlow<SellerProfile>
-    fun saveListing(listing: SellerListing): SellerListing
-    fun toggleListing(id: String, published: Boolean)
-    fun transitionOrder(id: String, status: OrderStatus)
-    fun saveProfile(profile: SellerProfile)
+    suspend fun saveListing(listing: SellerListing): CommerceResult<SellerListing>
+    suspend fun setListingState(id: String, state: ListingState): CommerceResult<SellerListing>
+    suspend fun transitionOrder(id: String, status: OrderStatus): CommerceResult<SellerOrder>
+    suspend fun saveProfile(profile: SellerProfile): CommerceResult<SellerProfile>
 }

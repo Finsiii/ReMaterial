@@ -1,8 +1,5 @@
 package com.rematerial.app.feature.production.presentation
 
-import android.content.Intent
-import android.net.Uri
-
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -55,7 +52,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -109,7 +105,18 @@ fun ProductionRoute(
                 ProductionPage.FORM -> ProductionFormScreen(state, back, viewModel::setQuantity, viewModel::setNotes, viewModel::setAddress, viewModel::setTargetDate, viewModel::setPhone, viewModel::setWhatsapp, viewModel::setPreferredContact, viewModel::submit)
                 ProductionPage.CONFIRMED -> ConfirmationScreen(state.submitted, viewModel::openHistory, back)
                 ProductionPage.HISTORY -> ProductionHistoryScreen(state.requests, back, viewModel::openRequest)
-                ProductionPage.REQUEST -> state.submitted?.let { RequestDetailScreen(it, back, viewModel::backToDiscovery) }
+                ProductionPage.REQUEST -> state.submitted?.let {
+                    RequestDetailScreen(
+                        request = it,
+                        onBack = back,
+                        onHome = viewModel::backToDiscovery,
+                        onComplete = viewModel::completeRequest,
+                        onRevision = viewModel::requestRevision,
+                        onCancel = viewModel::cancelRequest,
+                        loading = state.loading,
+                        error = state.error,
+                    )
+                }
             }
         }
     }
@@ -151,6 +158,7 @@ private fun DiscoveryScreen(
 @Composable
 private fun MapCanvas(artisans: List<ArtisanProfile>, modifier: Modifier) {
     Surface(modifier, color = Color(0xFFD8DED5), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+        Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription = "Peta ilustrasi area pengrajin" }) {
             val roads = listOf(
                 listOf(Offset(0f, size.height * .72f), Offset(size.width * .22f, size.height * .55f), Offset(size.width * .5f, size.height * .6f), Offset(size.width, size.height * .28f)),
@@ -167,6 +175,13 @@ private fun MapCanvas(artisans: List<ArtisanProfile>, modifier: Modifier) {
                 drawCircle(RematerialColors.DeepForest, 10f, point)
                 drawCircle(RematerialColors.Surface, 4f, point)
             }
+        }
+        Text(
+            "Ilustrasi demo · posisi dan rute belum tersedia",
+            Modifier.align(Alignment.BottomStart).padding(12.dp).background(RematerialColors.Surface.copy(alpha = .92f), RoundedCornerShape(8.dp)).padding(horizontal = 9.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = RematerialColors.Ink,
+        )
         }
     }
 }
@@ -192,7 +207,6 @@ private fun ArtisanListRow(artisan: ArtisanProfile, onClick: (ArtisanProfile) ->
 @Composable
 private fun ArtisanDetailScreen(state: ProductionState, onBack: () -> Unit, onContinue: () -> Unit) {
     val artisan = state.selectedArtisan ?: return
-    val context = LocalContext.current
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item { RematerialTopBar("Profil pengrajin", onBack = onBack) }
@@ -203,7 +217,7 @@ private fun ArtisanDetailScreen(state: ProductionState, onBack: () -> Unit, onCo
         item { DetailSection("Perkiraan proses", "${artisan.eta}\n${artisan.priceRange}\n${artisan.availability}") }
         item { Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { Column(Modifier.weight(1f)) { Text("${artisan.rating} / 5", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Text("Penilaian", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; Column(Modifier.weight(1f)) { Text(artisan.completedJobs, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink); Text(artisan.responseTime, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) } } }
         item { Text("Portofolio pilihan", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) { items(artisan.portfolioImageKeys.ifEmpty { listOf("material_metal", "material_wood") }) { key -> Image(painterResource(portfolioResource(key)), "Contoh karya ${artisan.name}", Modifier.size(146.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop) } }; Spacer(Modifier.height(18.dp)) }
-        item { Text("Lokasi kerja", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); MapCanvas(listOf(artisan), Modifier.fillMaxWidth().height(170.dp)); Spacer(Modifier.height(7.dp)); Text("${artisan.area}\n${artisan.workingHours}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Buka rute  →", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${artisan.latitude},${artisan.longitude}?q=${artisan.latitude},${artisan.longitude}"))) } }.padding(vertical = 8.dp)) }
+        item { Text("Lokasi kerja", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); MapCanvas(listOf(artisan), Modifier.fillMaxWidth().height(170.dp)); Spacer(Modifier.height(7.dp)); Text("${artisan.area}\n${artisan.workingHours}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Rute akan aktif setelah layanan peta terhubung.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(vertical = 10.dp)) }
         item { DetailSection("Kontak", "WhatsApp ${artisan.whatsapp}\n${artisan.verifiedState}") }
         item { Spacer(Modifier.height(14.dp)); Text("Ringkasan pilihan", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(8.dp)); Text("${state.draft.title}\n${state.draft.materialSummary}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(22.dp)); RematerialButton("Lanjutkan permintaan", onContinue, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowRight) }
     }
@@ -237,12 +251,12 @@ private fun ProductionFormScreen(
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item { RematerialTopBar("Detail permintaan", onBack = onBack) }
         item { Spacer(Modifier.height(16.dp)); Text("Hampir jadi.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Lengkapi detail agar pengrajin bisa memberi estimasi yang jelas.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Produk", "${state.draft.title}\n${state.draft.materialSummary}") }
-        item { RematerialField(state.quantity, onQuantity, "Kuantitas", placeholder = "Contoh: 2 unit") }
+        item { RematerialField(state.quantity, onQuantity, "Jumlah unit", placeholder = "Contoh: 2", keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)) }
         item { RematerialField(state.address, onAddress, "Alamat pengiriman", placeholder = "Alamat lengkap") }
         item { RematerialField(state.phone, onPhone, "Nomor WhatsApp", placeholder = "08xxxxxxxxxx", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) }
         item { RematerialField(state.whatsapp, onWhatsapp, "WhatsApp (opsional)", placeholder = "Kosongkan jika sama", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) }
         item { Text("Kontak utama: ${state.preferredContact}. Ketuk untuk mengganti.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest, modifier = Modifier.fillMaxWidth().sizeIn(minHeight = 48.dp).clickable { onPreferredContact(if (state.preferredContact == "WhatsApp") "Telepon" else "WhatsApp") }.padding(vertical = 12.dp)) }
-        item { RematerialField(state.targetDate, onTargetDate, "Target selesai", placeholder = "Contoh: 20 September 2026") }
+        item { RematerialField(state.targetDate, onTargetDate, "Target selesai", placeholder = "YYYY-MM-DD") }
         item { RematerialField(state.notes, onNotes, "Catatan untuk pengrajin", placeholder = "Bahan, ukuran, atau detail yang penting") }
         state.error?.let { error -> item { Text(error, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9B3F2F)) } }
         item { Spacer(Modifier.height(14.dp)); RematerialButton("Kirim permintaan", onSubmit, Modifier.fillMaxWidth(), enabled = !state.loading, leadingIcon = RematerialIcons.ArrowRight) }
@@ -256,7 +270,7 @@ private fun ConfirmationScreen(request: ProductionRequest?, onHistory: () -> Uni
         Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp),
         contentPadding = PaddingValues(top = 30.dp, bottom = RematerialDockMetrics.contentBottomPadding(bottom)),
     ) {
-        item { RematerialIcon(RematerialIcons.Hammer, null, Modifier.size(30.dp), RematerialColors.DeepForest); Spacer(Modifier.height(28.dp)); Text("Permintaan terkirim.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(10.dp)); Text("${request?.artisan?.name ?: "Pengrajin"} akan meninjau detail karya dan menghubungimu lewat proses berikutnya.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); request?.let { DetailSection("Nomor permintaan", it.id); DetailSection("Produk", it.draft.title); DetailSection("Target selesai", it.targetDate) }; Spacer(Modifier.height(16.dp)); RematerialButton("Lihat produksi", onHistory, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.History); Spacer(Modifier.height(10.dp)); RematerialButton("Kembali ke pengrajin", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
+        item { RematerialIcon(RematerialIcons.Hammer, null, Modifier.size(30.dp), RematerialColors.DeepForest); Spacer(Modifier.height(28.dp)); Text("Permintaan terkirim.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(10.dp)); Text("${request?.artisan?.name ?: "Pengrajin"} akan meninjau detail karya dan menghubungimu lewat proses berikutnya.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); request?.let { DetailSection("Nomor permintaan", it.id); DetailSection("Produk", it.draft.title); DetailSection("Target selesai", it.targetDateIso) }; Spacer(Modifier.height(16.dp)); RematerialButton("Lihat produksi", onHistory, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.History); Spacer(Modifier.height(10.dp)); RematerialButton("Kembali ke pengrajin", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
     }
 }
 
@@ -275,17 +289,55 @@ private fun ProductionHistoryScreen(requests: List<ProductionRequest>, onBack: (
 @Composable
 private fun RequestRow(request: ProductionRequest, onOpen: (ProductionRequest) -> Unit) {
     Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(request) }, color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
-        Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(request.draft.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(request.id, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; Spacer(Modifier.height(6.dp)); Text("${request.artisan.name} · target ${request.targetDate}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Spacer(Modifier.height(10.dp)); Text(request.status.label, style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest); Spacer(Modifier.height(6.dp)); RematerialProgress(request.status.progress) }
+        Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(request.draft.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(request.id, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; Spacer(Modifier.height(6.dp)); Text("${request.artisan.name} · target ${request.targetDateIso}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted); Spacer(Modifier.height(10.dp)); Text(request.status.label, style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest); Spacer(Modifier.height(6.dp)); RematerialProgress(request.status.progress) }
     }
 }
 
 @Composable
-private fun RequestDetailScreen(request: ProductionRequest, onBack: () -> Unit, onHome: () -> Unit) {
+private fun RequestDetailScreen(
+    request: ProductionRequest,
+    onBack: () -> Unit,
+    onHome: () -> Unit,
+    onComplete: () -> Unit,
+    onRevision: () -> Unit,
+    onCancel: () -> Unit,
+    loading: Boolean,
+    error: String?,
+) {
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
         contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
     ) {
-        item { RematerialTopBar("Detail produksi", onBack = onBack); Spacer(Modifier.height(18.dp)); Text(request.draft.title, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("${request.id} · ${request.artisan.name}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Status saat ini", request.status.label); RematerialProgress(request.status.progress); Spacer(Modifier.height(22.dp)); Text("Linimasa", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp)); TimelineRow("Permintaan dikirim", "Detail material dan kebutuhan diterima", true); TimelineRow("Ditinjau pengrajin", "Kesesuaian alat dan estimasi diperiksa", request.status.progress >= .4f); TimelineRow("Dikerjakan", "Pengrajin mulai membentuk karya", request.status.progress >= .7f); TimelineRow("Siap dikirim", "Karya selesai dan menunggu pengiriman", request.status.progress >= 1f); Spacer(Modifier.height(18.dp)); DetailSection("Pengiriman", "${request.address}\nTarget ${request.targetDate}"); DetailSection("Kontak", "${request.preferredContact}: ${if (request.preferredContact == "WhatsApp") request.whatsapp.ifBlank { request.phone } else request.phone}"); DetailSection("Catatan", request.notes.ifBlank { "Tidak ada catatan tambahan." }); RematerialButton("Kembali ke daftar produksi", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft) }
+        item {
+            RematerialTopBar("Detail produksi", onBack = onBack)
+            Spacer(Modifier.height(18.dp)); Text(request.draft.title, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
+            Spacer(Modifier.height(8.dp)); Text("${request.id} · ${request.artisan.name}", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            Spacer(Modifier.height(20.dp)); DetailSection("Status saat ini", request.status.label); RematerialProgress(request.status.progress)
+            Spacer(Modifier.height(22.dp)); Text("Ringkasan bahan", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp)); DetailSection("Bahan", request.draft.materialSummary)
+            DetailSection("Kebutuhan kemampuan", request.draft.requiredCapabilities.ifEmpty { listOf("Mengikuti detail produk").toList() }.joinToString(", "))
+            DetailSection("Alat yang diperlukan", request.draft.requiredTools.ifEmpty { listOf("Ditentukan pengrajin").toList() }.joinToString(", "))
+            DetailSection("Teknik yang diperlukan", request.draft.requiredSkills.ifEmpty { listOf("Ditentukan pengrajin").toList() }.joinToString(", "))
+            if (request.draft.provisionalScore > 0) DetailSection("Perkiraan pemakaian", "${request.draft.estimatedUsage.ifBlank { "Mengikuti analisis" }} · kecocokan awal ${request.draft.provisionalScore.toInt()}/100")
+            Spacer(Modifier.height(12.dp)); Text("Linimasa", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(10.dp))
+            TimelineRow("Permintaan dikirim", "Detail material dan kebutuhan diterima", request.status != ProductionStatus.CANCELLED)
+            TimelineRow("Diterima pengrajin", "Kesesuaian alat dan estimasi diperiksa", request.status.progress >= .36f)
+            TimelineRow("Dikerjakan", "Pengrajin mulai membentuk karya", request.status.progress >= .68f)
+            TimelineRow("Siap diperiksa", "Karya menunggu pemeriksaanmu", request.status.progress >= .9f)
+            if (request.status == ProductionStatus.REVISION_REQUESTED) TimelineRow("Revisi diminta", "Pengrajin perlu memperbaiki hasil sebelum diperiksa kembali", true)
+            Spacer(Modifier.height(18.dp)); DetailSection("Pengiriman", "${request.address}\nTarget ${request.targetDateIso}")
+            DetailSection("Kontak", "${request.preferredContact}: ${if (request.preferredContact == "WhatsApp") request.whatsapp.ifBlank { request.phone } else request.phone}")
+            DetailSection("Catatan", request.notes.ifBlank { "Tidak ada catatan tambahan." })
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9B3F2F), modifier = Modifier.padding(bottom = 10.dp)) }
+            if (request.status == ProductionStatus.READY_FOR_REVIEW) {
+                RematerialButton("Setujui hasil", onComplete, Modifier.fillMaxWidth(), enabled = !loading, leadingIcon = RematerialIcons.Check)
+                RematerialButton("Minta revisi", onRevision, Modifier.fillMaxWidth().padding(top = 8.dp), enabled = !loading, leadingIcon = RematerialIcons.ArrowLeft)
+            }
+            if (request.status in setOf(ProductionStatus.SUBMITTED, ProductionStatus.NEEDS_CLARIFICATION, ProductionStatus.ACCEPTED, ProductionStatus.IN_PRODUCTION, ProductionStatus.READY_FOR_REVIEW)) {
+                RematerialButton("Batalkan permintaan", onCancel, Modifier.fillMaxWidth().padding(top = 8.dp), enabled = !loading, leadingIcon = RematerialIcons.ArrowLeft)
+            }
+            Spacer(Modifier.height(10.dp)); RematerialButton("Kembali ke daftar produksi", onHome, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.ArrowLeft)
+        }
     }
 }
 
