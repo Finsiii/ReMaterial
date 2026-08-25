@@ -65,6 +65,7 @@ data class AnalysisUiState(
     val step: AnalysisStep = AnalysisStep.SCAN,
     val analysisId: AnalysisId = AnalysisId("analysis-${UUID.randomUUID()}"),
     val photo: PhotoReference? = null,
+    val additionalPhotos: List<PhotoReference> = emptyList(),
     val isManual: Boolean = false,
     val initial: InitialAnalysisResponse? = null,
     val prediction: CategoryPrediction? = null,
@@ -84,6 +85,8 @@ data class AnalysisUiState(
     val savedIdeas: List<SavedAnalysisIdea> = emptyList(),
     val motionDirection: AnalysisMotionDirection = AnalysisMotionDirection.FORWARD,
 ) {
+    val photos: List<PhotoReference> get() = listOfNotNull(photo) + additionalPhotos
+    val photoUris: List<String> get() = photos.map { Uri.fromFile(File(it.privatePath)).toString() }
     val photoUri: String? get() = photo?.privatePath?.let { Uri.fromFile(File(it)).toString() }
     val photoSizeBytes: Long get() = photo?.sizeBytes ?: 0L
     val schemaReady: Boolean get() = initial != null && selectedCategory == initial.prediction.category
@@ -124,6 +127,7 @@ class AnalysisViewModel @Inject constructor(
     private fun importMedia(value: String, isCapture: Boolean) {
         if (!_state.value.acceptsIntent()) return
         val previous = _state.value
+        if (previous.photos.size >= 10) { _state.value = previous.copy(error = "Maksimal 10 foto untuk satu analisis."); return }
         val token = beginOperation { it.copy(loading = true, error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
             val imported = if (isCapture) {
@@ -139,7 +143,7 @@ class AnalysisViewModel @Inject constructor(
                 )
                 is Result.Success -> {
                     if (!isCurrent(token)) { mediaStore.delete(imported.value); return@launch }
-                    val proposed = freshForPhoto(imported.value)
+                    val proposed = freshForPhoto(previous, imported.value)
                     when (val committed = commitSession(proposed.toSession())) {
                         is Result.Failure -> {
                             mediaStore.delete(imported.value)
@@ -152,7 +156,6 @@ class AnalysisViewModel @Inject constructor(
                         is Result.Success -> if (isCurrent(token)) {
                             _state.value = proposed
                             clearActive(token)
-                            previous.photo?.let { deleteIfUnreferenced(it) }
                         }
                     }
                 }
@@ -172,13 +175,14 @@ class AnalysisViewModel @Inject constructor(
             val safeBoundary = proposed.copy(step = AnalysisStep.SCAN, loading = false)
             when (val saved = commitSession(safeBoundary.toSession())) {
                 is Result.Failure -> failIfCurrent(token, saved.error.userMessage(), null)
-                is Result.Success -> { previous.photo?.let { deleteIfUnreferenced(it) }; performInitial(token, category) }
+                is Result.Success -> { previous.photos.forEach { deleteIfUnreferenced(it) }; performInitial(token, category) }
             }
         }
     }
 
     fun startPhotoAnalysis() {
-        if (!_state.value.acceptsIntent() || _state.value.photo == null) return
+        if (!_state.value.acceptsIntent()) return
+        if (_state.value.photos.size < 5) { _state.value = _state.value.copy(error = "Tambahkan minimal 5 foto agar AI bisa membandingkan sudut dan kondisi bahan."); return }
         startInitial(null)
     }
 
@@ -192,7 +196,7 @@ class AnalysisViewModel @Inject constructor(
 
     private suspend fun performInitial(token: Long, manualCategory: MaterialCategory?) {
         val current = _state.value
-        val request = InitialAnalysisRequest(current.analysisId, current.photo, manualCategory)
+        val request = InitialAnalysisRequest(current.analysisId, current.photo, current.additionalPhotos, manualCategory)
         when (val result = gateway.start(request)) {
             is Result.Failure -> failIfCurrent(token, result.error.userMessage(), AnalysisRetryAction.StartInitial(manualCategory))
             is Result.Success -> acceptInitial(token, request, result.value)
@@ -209,7 +213,7 @@ class AnalysisViewModel @Inject constructor(
                 val next = _state.value.copy(
                     step = AnalysisStep.CONFIRM, initial = response, prediction = response.prediction, confirmation = confirmation,
                     selectedCategory = when { explicit -> request.manualCategory; confirmation == AnalysisConfirmation.MANUAL_REQUIRED -> null; else -> response.prediction.category },
-                    categoryConfirmed = explicit, loading = false, error = null, retryAction = null,
+                    categoryConfirmed = explicit, answers = response.suggestedValues.mapValues { FieldAnswer.Value(it.value) }, loading = false, error = null, retryAction = null,
                     motionDirection = AnalysisMotionDirection.FORWARD,
                 )
                 commitThenPublish(token, next, "Hasil kategori sudah diterima, tetapi belum dapat disimpan.")
@@ -222,7 +226,7 @@ class AnalysisViewModel @Inject constructor(
         invalidateOperation()
         val ready = _state.value.initial?.prediction?.category == category
         _state.value = _state.value.copy(
-            selectedCategory = category, categoryConfirmed = ready, answers = emptyMap(), fieldErrors = emptyMap(),
+            selectedCategory = category, categoryConfirmed = ready, answers = if (ready) _state.value.initial?.suggestedValues.orEmpty().mapValues { FieldAnswer.Value(it.value) } else emptyMap(), fieldErrors = emptyMap(),
             result = null, loading = false, error = null, retryAction = null,
         )
         if (ready) schedulePersist() else startInitial(category)
@@ -231,9 +235,10 @@ class AnalysisViewModel @Inject constructor(
     fun continueToInputs() {
         val current = _state.value
         if (!current.acceptsIntent() || !current.canContinue) return
-        val answers = current.initial?.requestedFields.orEmpty().associate { it.id.value to (current.answers[it.id.value] ?: FieldAnswer.Value("")) }
+        val answers = current.initial?.suggestedValues.orEmpty().mapValues { FieldAnswer.Value(it.value) } + current.initial?.requestedFields.orEmpty().associate { it.id.value to (current.answers[it.id.value] ?: FieldAnswer.Value("")) }
         _state.value = current.copy(step = AnalysisStep.INPUTS, answers = answers, fieldErrors = emptyMap(), error = null, retryAction = null, motionDirection = AnalysisMotionDirection.FORWARD)
         schedulePersist()
+        if (current.initial?.requestedFields.isNullOrEmpty()) submitInputs()
     }
 
     fun updateValue(id: String, value: String) {
@@ -255,14 +260,15 @@ class AnalysisViewModel @Inject constructor(
         val category = current.selectedCategory ?: return
         val validation = AnalysisInputValidator.validate(response.requestedFields, current.answers)
         if (!validation.isValid) { _state.value = current.copy(fieldErrors = validation.fieldErrors, error = "Periksa kembali jawaban yang ditandai.", retryAction = null); return }
-        val request = CompletedAnalysisRequest(current.analysisId, category, response.requestedFields.map { it.toObservation(current.answers[it.id.value]) })
+        val fullSchema = com.rematerial.app.feature.analysis.domain.AnalysisCatalog.schemaFor(category)
+        val request = CompletedAnalysisRequest(current.analysisId, category, fullSchema.map { it.toObservation(current.answers[it.id.value]) })
         val token = beginOperation { it.copy(loading = true, fieldErrors = emptyMap(), error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
             when (val result = gateway.complete(request)) {
                 is Result.Failure -> failIfCurrent(token, result.error.userMessage(), AnalysisRetryAction.Complete)
                 is Result.Success -> {
                     if (!isCurrent(token) || _state.value.analysisId != request.analysisId || _state.value.selectedCategory != category || _state.value.step != AnalysisStep.INPUTS) return@launch
-                    when (val checked = AnalysisResponseValidator.completed(current.analysisId, category, result.value, request.observations, response.requestedFields)) {
+                    when (val checked = AnalysisResponseValidator.completed(current.analysisId, category, result.value, request.observations, fullSchema)) {
                         is Result.Failure -> failIfCurrent(token, checked.error.userMessage(), AnalysisRetryAction.Complete)
                         is Result.Success -> {
                             val next = _state.value.copy(step = AnalysisStep.RESULT, result = result.value, selectedOptionId = null, saved = false, loading = false, error = null, retryAction = null, motionDirection = AnalysisMotionDirection.FORWARD)
@@ -288,7 +294,7 @@ class AnalysisViewModel @Inject constructor(
         val optionId = current.selectedOptionId?.let(::ProductOptionId) ?: return
         val token = beginOperation { it.copy(saving = true, error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
-            when (val saved = sessions.saveIdea(SavedAnalysisIdea(current.analysisId, optionId, result, current.photo))) {
+            when (val saved = sessions.saveIdea(SavedAnalysisIdea(current.analysisId, optionId, result, current.photo, current.additionalPhotos))) {
                 is Result.Failure -> failIfCurrent(token, saved.error.userMessage(), AnalysisRetryAction.SaveIdea, true)
                 is Result.Success -> {
                     if (!isCurrent(token) || _state.value.analysisId != current.analysisId || _state.value.selectedOptionId != optionId.value || _state.value.step != AnalysisStep.RESULT) return@launch
@@ -330,7 +336,7 @@ class AnalysisViewModel @Inject constructor(
     fun openSavedIdea(idea: SavedAnalysisIdea) {
         if (!_state.value.acceptsIntent()) return
         _state.value = AnalysisUiState(
-            step = AnalysisStep.RESULT, analysisId = idea.analysisId, photo = idea.photo, selectedCategory = idea.result.category,
+            step = AnalysisStep.RESULT, analysisId = idea.analysisId, photo = idea.photo, additionalPhotos = idea.additionalPhotos, selectedCategory = idea.result.category,
             categoryConfirmed = true, result = idea.result, selectedOptionId = idea.optionId.value, saved = true,
             hydrating = false, savedIdeas = _state.value.savedIdeas, motionDirection = AnalysisMotionDirection.FORWARD,
         )
@@ -364,7 +370,7 @@ class AnalysisViewModel @Inject constructor(
                 is Result.Success -> if (isCurrent(token)) {
                     _state.value = AnalysisUiState(hydrating = false)
                     clearActive(token)
-                    previous.photo?.let { deleteIfUnreferenced(it) }
+                    previous.photos.forEach { deleteIfUnreferenced(it) }
                 }
             }
         }
@@ -383,12 +389,13 @@ class AnalysisViewModel @Inject constructor(
         mediaStore.cleanupAbandoned()
         val session = snapshot.session
         val validPhoto = session?.photo?.takeIf { mediaStore.isValidOwned(it) }
+        val validAdditional = session?.additionalPhotos.orEmpty().filter { mediaStore.isValidOwned(it) }
         val validPhase = session?.phase?.takeIf { it.isValidFor(session, validPhoto != null) }
         val restored = when {
             session == null -> AnalysisUiState(hydrating = true, savedIdeas = snapshot.savedIdeas)
             validPhase == null -> AnalysisUiState(hydrating = true, savedIdeas = snapshot.savedIdeas, error = "Sesi analisis sebelumnya tidak lengkap. Mulai analisis baru.", retryAction = null)
             else -> AnalysisUiState(
-                step = validPhase.toStep(), analysisId = session.analysisId, photo = validPhoto, initial = session.initial,
+                step = validPhase.toStep(), analysisId = session.analysisId, photo = validPhoto, additionalPhotos = validAdditional, initial = session.initial,
                 prediction = session.initial?.prediction, confirmation = session.initial?.prediction?.confidence?.let(AnalysisConfirmation::from),
                 categoryConfirmed = session.categoryConfirmed, isManual = session.isManual, selectedCategory = session.selectedCategory,
                 answers = session.answers, result = session.result, selectedOptionId = session.selectedOptionId?.value,
@@ -518,12 +525,22 @@ class AnalysisViewModel @Inject constructor(
             selectedOptionId == other.selectedOptionId
 
     private fun AnalysisUiState.toSession() = AnalysisSession(
-        analysisId = analysisId, photo = photo, initial = initial, selectedCategory = selectedCategory, answers = answers,
+        analysisId = analysisId, photo = photo, additionalPhotos = additionalPhotos, initial = initial, selectedCategory = selectedCategory, answers = answers,
         result = result, selectedOptionId = selectedOptionId?.let(::ProductOptionId), categoryConfirmed = categoryConfirmed,
         isManual = isManual, phase = step.toPhase(),
     )
 
-    private fun freshForPhoto(photo: PhotoReference) = AnalysisUiState(step = AnalysisStep.PREVIEW, analysisId = AnalysisId("analysis-${UUID.randomUUID()}"), photo = photo, hydrating = false)
+    private fun freshForPhoto(previous: AnalysisUiState, added: PhotoReference): AnalysisUiState {
+        val photos = previous.photos + added
+        return AnalysisUiState(
+            step = AnalysisStep.PREVIEW,
+            analysisId = if (previous.photos.isEmpty()) AnalysisId("analysis-${UUID.randomUUID()}") else previous.analysisId,
+            photo = photos.first(),
+            additionalPhotos = photos.drop(1),
+            hydrating = false,
+            savedIdeas = previous.savedIdeas,
+        )
+    }
 
     private fun RequestedField.toObservation(answer: FieldAnswer?): Observation {
         if (answer !is FieldAnswer.Value || answer.raw.isBlank()) return Observation(id, unit = unit, availability = Availability.NOT_AVAILABLE, source = ValueSource.USER)

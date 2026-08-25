@@ -78,7 +78,7 @@ class RoomAnalysisSessionRepository(
         val ideas = rows.filter { it.recordType == TYPE_IDEA }.sortedByDescending(AnalysisStateEntity::updatedAtEpochMs).map {
             json.decodeFromString(SavedAnalysisIdea.serializer(), it.payload)
         }
-        AnalysisPersistenceSnapshot(session, ideas, dao.referencedMediaPaths().toSet())
+        AnalysisPersistenceSnapshot(session, ideas, dao.referencedMediaPaths().flatMap { it.split(MEDIA_SEPARATOR) }.filter(String::isNotBlank).toSet())
         }
     }
 
@@ -97,7 +97,7 @@ class RoomAnalysisSessionRepository(
                 owner + SESSION_ID,
                 TYPE_SESSION,
                 json.encodeToString(AnalysisSession.serializer(), session),
-                session.photo?.privatePath,
+                (listOfNotNull(session.photo) + session.additionalPhotos).joinToString(MEDIA_SEPARATOR) { it.privatePath }.ifBlank { null },
                 System.currentTimeMillis(),
             ),
         )
@@ -117,7 +117,7 @@ class RoomAnalysisSessionRepository(
                 "${owner}idea:${idea.analysisId.value}:${idea.optionId.value}",
                 TYPE_IDEA,
                 json.encodeToString(SavedAnalysisIdea.serializer(), idea),
-                idea.photo?.privatePath,
+                (listOfNotNull(idea.photo) + idea.additionalPhotos).joinToString(MEDIA_SEPARATOR) { it.privatePath }.ifBlank { null },
                 System.currentTimeMillis(),
             ),
         )
@@ -131,7 +131,7 @@ class RoomAnalysisSessionRepository(
         }
     }
 
-    suspend fun referencedMediaPaths(): Set<String> = dao.referencedMediaPaths().toSet()
+    suspend fun referencedMediaPaths(): Set<String> = dao.referencedMediaPaths().flatMap { it.split(MEDIA_SEPARATOR) }.filter(String::isNotBlank).toSet()
 
     private fun ownerPrefix(): String? = sessions.current()?.accountId?.value?.let { "account:$it:" }
 
@@ -170,6 +170,7 @@ class RoomAnalysisSessionRepository(
         const val SESSION_ID = "active_session"
         const val TYPE_SESSION = "session"
         const val TYPE_IDEA = "idea"
+        const val MEDIA_SEPARATOR = "\u001F"
     }
 }
 
@@ -181,8 +182,8 @@ class InMemoryAnalysisSessionRepository : AnalysisSessionRepository {
             session,
             ideas.values.toList(),
             buildSet {
-                session?.photo?.privatePath?.let(::add)
-                ideas.values.mapNotNullTo(this) { it.photo?.privatePath }
+                session?.let { current -> (listOfNotNull(current.photo) + current.additionalPhotos).mapTo(this) { it.privatePath } }
+                ideas.values.flatMap { listOfNotNull(it.photo) + it.additionalPhotos }.mapTo(this) { it.privatePath }
             },
         ),
     )

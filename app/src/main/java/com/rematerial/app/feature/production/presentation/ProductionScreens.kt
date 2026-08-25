@@ -81,6 +81,7 @@ import com.rematerial.app.feature.production.domain.ProductionStatus
 @Composable
 fun ProductionRoute(
     onBack: () -> Unit,
+    onChangeProduct: () -> Unit,
     viewModel: ProductionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -102,7 +103,7 @@ fun ProductionRoute(
             when (currentPage) {
                 ProductionPage.DISCOVERY -> DiscoveryScreen(state, back, viewModel::setArea, viewModel::search, viewModel::openDetail, viewModel::openHistory)
                 ProductionPage.DETAIL -> ArtisanDetailScreen(state, back, viewModel::openForm)
-                ProductionPage.FORM -> ProductionFormScreen(state, back, viewModel::setQuantity, viewModel::setNotes, viewModel::setAddress, viewModel::setTargetDate, viewModel::setPhone, viewModel::setWhatsapp, viewModel::setPreferredContact, viewModel::submit)
+                ProductionPage.FORM -> ProductionFormScreen(state, back, onChangeProduct, viewModel::setQuantity, viewModel::setNotes, viewModel::setAddress, viewModel::setTargetDate, viewModel::setPhone, viewModel::setWhatsapp, viewModel::setPreferredContact, viewModel::submit)
                 ProductionPage.CONFIRMED -> ConfirmationScreen(state.submitted, viewModel::openHistory, back)
                 ProductionPage.HISTORY -> ProductionHistoryScreen(state.requests, back, viewModel::openRequest)
                 ProductionPage.REQUEST -> state.submitted?.let {
@@ -238,6 +239,7 @@ private fun DetailSection(title: String, body: String) {
 private fun ProductionFormScreen(
     state: ProductionState,
     onBack: () -> Unit,
+    onChangeProduct: () -> Unit,
     onQuantity: (String) -> Unit,
     onNotes: (String) -> Unit,
     onAddress: (String) -> Unit,
@@ -250,7 +252,7 @@ private fun ProductionFormScreen(
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(bottom))) {
         item { RematerialTopBar("Detail permintaan", onBack = onBack) }
-        item { Spacer(Modifier.height(16.dp)); Text("Hampir jadi.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Lengkapi detail agar pengrajin bisa memberi estimasi yang jelas.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); DetailSection("Produk", "${state.draft.title}\n${state.draft.materialSummary}") }
+        item { Spacer(Modifier.height(16.dp)); Text("Hampir jadi.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Pastikan benda yang dipilih sudah benar sebelum dikirim ke pengrajin.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(20.dp)); Surface(Modifier.fillMaxWidth(), color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, RematerialColors.Bronze)) { Column(Modifier.padding(18.dp)) { Text("Kamu akan membuat", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest); Spacer(Modifier.height(5.dp)); Text(state.draft.title, style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Spacer(Modifier.height(6.dp)); Text(state.draft.materialSummary, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(10.dp)); Text("Ganti pilihan", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.sizeIn(minHeight = 48.dp).clickable(role = Role.Button, onClick = onChangeProduct).padding(vertical = 14.dp)) } }; Spacer(Modifier.height(18.dp)) }
         item { RematerialField(state.quantity, onQuantity, "Jumlah unit", placeholder = "Contoh: 2", keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)) }
         item { RematerialField(state.address, onAddress, "Alamat pengiriman", placeholder = "Alamat lengkap") }
         item { RematerialField(state.phone, onPhone, "Nomor WhatsApp", placeholder = "08xxxxxxxxxx", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) }
@@ -259,7 +261,7 @@ private fun ProductionFormScreen(
         item { RematerialField(state.targetDate, onTargetDate, "Target selesai", placeholder = "YYYY-MM-DD") }
         item { RematerialField(state.notes, onNotes, "Catatan untuk pengrajin", placeholder = "Bahan, ukuran, atau detail yang penting") }
         state.error?.let { error -> item { Text(error, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9B3F2F)) } }
-        item { Spacer(Modifier.height(14.dp)); RematerialButton("Kirim permintaan", onSubmit, Modifier.fillMaxWidth(), enabled = !state.loading, leadingIcon = RematerialIcons.ArrowRight) }
+        item { Spacer(Modifier.height(14.dp)); RematerialButton("Ajukan ${state.draft.title}", onSubmit, Modifier.fillMaxWidth(), enabled = !state.loading, leadingIcon = RematerialIcons.ArrowRight) }
     }
 }
 

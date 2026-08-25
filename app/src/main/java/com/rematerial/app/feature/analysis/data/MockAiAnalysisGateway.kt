@@ -80,7 +80,12 @@ object AnalysisFixtures {
     ): AnalysisFixture {
         val id = AnalysisId("analysis-${category.name.lowercase()}")
         val fields = AnalysisCatalog.schemaFor(category)
-        val initial = InitialAnalysisResponse(id, CategoryPrediction(category, confidence, candidates(category, confidence)), fields)
+        val initial = InitialAnalysisResponse(
+            id,
+            CategoryPrediction(category, confidence, candidates(category, confidence)),
+            fields.take(2),
+            mapOf("quantity" to "5", "condition" to "good", "contamination" to "none"),
+        )
         val observations = fields.map { defaultObservation(category, it, safetyOutcome) }
         val quantityObservation = observations.first { it.fieldId.value == "quantity" }
         val quantity = (quantityObservation.value as InspectionValue.Decimal).value
@@ -88,7 +93,7 @@ object AnalysisFixtures {
         val science = ScienceFinding(
             FindingId("finding-${category.name.lowercase()}"),
             "Indikasi ${category.displayName}",
-            listOf(FieldId(categoryField), FieldId("quantity")),
+            listOf(FieldId("condition"), FieldId("quantity")),
             principle(category),
             listOf(SourceId("rematerial-material-procedure"), SourceId("school-material-safety")),
             interpretation(category),
@@ -191,8 +196,8 @@ object AnalysisFixtures {
         val unit = quantityObservation.unit ?: AnalysisCatalog.contractFor(request.category, FieldId("quantity"))?.unit ?: UnitCode.KG
         val safety = SafetyPolicy.assess(request.category, request.observations.associateBy(Observation::fieldId))
         val options = if (safety == SafetyOutcome.BLOCK) emptyList() else fixture.availableOptions.mapIndexed { index, option ->
-            val minimum = option.minimumQuantity.coerceAtLeast(.01)
-            val estimatedUsed = usableQuantity(quantity) * (.55 + index * .15)
+            val minimum = if (unit == UnitCode.PCS) (index + 1).toDouble() else (quantity * (.2 + index * .1)).coerceAtLeast(.01)
+            val estimatedUsed = (usableQuantity(quantity) * (.45 + index * .15)).coerceAtMost(quantity)
             val components = scoreComponents(
                 requirements = option.parameterRequirements,
                 observations = request.observations,
@@ -215,7 +220,10 @@ object AnalysisFixtures {
             analysisId = request.analysisId,
             observations = request.observations,
             science = fixture.completed.science.map { finding ->
-                finding.copy(interpretation = "Kesimpulan awal ini memakai ${finding.observationRefs.size} jawaban aktual pengguna untuk ${request.category.displayName.lowercase()}.")
+                finding.copy(
+                    observationRefs = listOf(FieldId("condition"), FieldId("quantity")),
+                    interpretation = "Kesimpulan awal ini memakai foto dan jawaban penting pengguna untuk ${request.category.displayName.lowercase()}.",
+                )
             },
             mathematics = calculations(
                 quantity,
@@ -268,14 +276,6 @@ object AnalysisFixtures {
         ProductParameterRequirement(FieldId("quantity"), minimumNumeric = .01),
         ProductParameterRequirement(FieldId("condition"), acceptedChoices = listOf("good", "worn")),
         ProductParameterRequirement(FieldId("contamination"), acceptedChoices = listOf("none", "low")),
-        when (category) {
-            MaterialCategory.METAL -> ProductParameterRequirement(FieldId("sharp_edges"), acceptedChoices = listOf("no"))
-            MaterialCategory.CABLE -> ProductParameterRequirement(FieldId("powered"), acceptedChoices = listOf("no"))
-            MaterialCategory.PLASTIC -> ProductParameterRequirement(FieldId("chemical_contact"), acceptedChoices = listOf("no"))
-            MaterialCategory.WOOD -> ProductParameterRequirement(FieldId("treatment"), acceptedChoices = listOf("no", "unknown"))
-            MaterialCategory.TEXTILE -> ProductParameterRequirement(FieldId("wet_mold"), acceptedChoices = listOf("no", "light"))
-            MaterialCategory.ELECTRONICS -> ProductParameterRequirement(FieldId("battery"), acceptedChoices = listOf("no"))
-        },
     )
 
     private fun ProductParameterRequirement.isSatisfiedBy(observation: Observation?): Boolean {
@@ -323,8 +323,9 @@ object AnalysisFixtures {
             InspectionFieldType.BOOLEAN -> InspectionValue.BooleanValue(false)
             InspectionFieldType.CHOICE -> InspectionValue.Choice(
                 when (field.id.value) {
-                    "condition" -> "good"
-                    "contamination", "corrosion" -> "none"
+                    "condition" -> if (desiredSafety == SafetyOutcome.CAUTION) "unknown" else "good"
+                    "contamination" -> if (desiredSafety == SafetyOutcome.BLOCK) "suspected_hazardous" else "none"
+                    "corrosion" -> "none"
                     "rot_mold" -> "none"
                     "wet_mold" -> if (category == MaterialCategory.TEXTILE && desiredSafety == SafetyOutcome.CAUTION) "light" else "no"
                     "oil_chemical" -> "no"

@@ -107,7 +107,10 @@ class DomainContractsTest {
         val response = gateway.start(photoRequest())
         assertTrue(response is Result.Success)
         assertEquals(MaterialCategory.WOOD, (response as Result.Success).value.prediction.category)
-        assertTrue(response.value.requestedFields.isNotEmpty())
+        assertTrue(response.value.requestedFields.size <= 2)
+        assertEquals("1", response.value.suggestedValues["quantity"])
+        assertEquals("unknown", response.value.suggestedValues["condition"])
+        assertEquals("unknown", response.value.suggestedValues["contamination"])
     }
 
     @Test
@@ -150,6 +153,7 @@ class DomainContractsTest {
     private fun photoRequest() = InitialAnalysisRequest(
         analysisId = AnalysisId("analysis-photo"),
         photo = PhotoReference("media-1", "/private/photo.jpg", "image/jpeg", 3),
+        additionalPhotos = (2..5).map { index -> PhotoReference("media-$index", "/private/photo-$index.jpg", "image/jpeg", 3) },
     )
 
     private fun mediaReader() = object : MediaPayloadReader {

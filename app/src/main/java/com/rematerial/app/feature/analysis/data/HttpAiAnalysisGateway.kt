@@ -44,19 +44,22 @@ class HttpAiAnalysisGateway(
     override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> {
         if (!isSecureBaseUrl()) return insecureUrlFailure()
         request.manualCategory?.let { category ->
-            return Result.Success(initialResponse(request, category, confidence = 1.0))
+            return Result.Success(initialResponse(request, category, confidence = 1.0, listOf("quantity", "condition"), mapOf("quantity" to "1", "condition" to "unknown", "contamination" to "unknown")))
         }
 
-        val photo = request.photo ?: return Result.Failure(DomainFailure.UnsupportedImage)
+        if (request.photos.size !in 5..10) return Result.Failure(DomainFailure.UnsupportedImage)
         val reader = mediaPayloadReader ?: return Result.Failure(DomainFailure.Unavailable)
-        val bytes = when (val media = reader.read(photo)) {
-            is Result.Success -> media.value
-            is Result.Failure -> return media
+        val images = mutableListOf<String>()
+        request.photos.forEach { photo ->
+            when (val media = reader.read(photo)) {
+                is Result.Success -> images += Base64.getEncoder().encodeToString(media.value)
+                is Result.Failure -> return media
+            }
         }
         val reply = when (
             val response = ask(
                 message = ReMaterialAiPrompts.initial(request.analysisId.value),
-                image = Base64.getEncoder().encodeToString(bytes),
+                images = images,
             )
         ) {
             is Result.Success -> response.value
@@ -67,7 +70,14 @@ class HttpAiAnalysisGateway(
             val classification = decodeReply<ClassificationReply>(reply)
             val category = classification.category.toMaterialCategory()
             val confidence = classification.confidencePercent.toConfidence()
-            val response = initialResponse(request, category, confidence)
+            val schema = AnalysisCatalog.schemaFor(category)
+            val suggested = mapOf(
+                "quantity" to classification.quantityEstimate.toQuantity(category),
+                "condition" to classification.condition.takeIf { it in setOf("good", "worn", "damaged", "unknown") }.orEmpty().ifBlank { "unknown" },
+                "contamination" to classification.contamination.takeIf { it in setOf("none", "low", "unknown", "suspected_hazardous") }.orEmpty().ifBlank { "unknown" },
+            )
+            val followUps = classification.followUpIds.distinct().filter { id -> schema.any { it.id.value == id } }.take(2)
+            val response = initialResponse(request, category, confidence, followUps, suggested)
             when (AnalysisValidator.validate(response)) {
                 is Result.Success -> Result.Success(response)
                 is Result.Failure -> Result.Failure(DomainFailure.UnsupportedSchema)
@@ -101,12 +111,12 @@ class HttpAiAnalysisGateway(
         }
     }
 
-    private suspend fun ask(message: String, image: String? = null): Result<String> = try {
+    private suspend fun ask(message: String, image: String? = null, images: List<String> = emptyList()): Result<String> = try {
         val response = client.post(baseUrl.trimEnd('/') + "/v1/chat") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Accept, ContentType.Application.Json.toString())
             authorizationProvider.authorizationHeader()?.let { header(HttpHeaders.Authorization, it) }
-            setBody(json.encodeToString(ChatRequest(message, image, model)))
+            setBody(json.encodeToString(ChatRequest(message, image, images, model)))
         }
         when {
             response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden ->
@@ -114,7 +124,7 @@ class HttpAiAnalysisGateway(
             response.status == HttpStatusCode.RequestTimeout || response.status.value == 504 ->
                 Result.Failure(DomainFailure.Timeout)
             response.status.value == 400 || response.status.value == 413 || response.status.value == 415 || response.status.value == 422 ->
-                Result.Failure(if (image != null) DomainFailure.UnsupportedImage else DomainFailure.MalformedResponse)
+                Result.Failure(if (image != null || images.isNotEmpty()) DomainFailure.UnsupportedImage else DomainFailure.MalformedResponse)
             response.status.value !in 200..299 -> Result.Failure(DomainFailure.Unavailable)
             else -> {
                 val envelope = json.decodeFromString<ChatEnvelope>(response.bodyAsText())
@@ -138,10 +148,13 @@ class HttpAiAnalysisGateway(
         request: InitialAnalysisRequest,
         category: MaterialCategory,
         confidence: Double,
+        followUpIds: List<String>,
+        suggestedValues: Map<String, String>,
     ) = InitialAnalysisResponse(
         analysisId = request.analysisId,
         prediction = CategoryPrediction(category, confidence, rankedCandidates(category, confidence)),
-        requestedFields = AnalysisCatalog.schemaFor(category),
+        requestedFields = AnalysisCatalog.schemaFor(category).filter { it.id.value in followUpIds },
+        suggestedValues = suggestedValues,
     )
 
     private fun rankedCandidates(category: MaterialCategory, confidence: Double): List<RankedCategoryPrediction> {
@@ -184,6 +197,10 @@ class HttpAiAnalysisGateway(
 
     private fun String?.orFallback(fallback: String): String = this?.trim()?.takeIf(String::isNotEmpty) ?: fallback
     private fun Double.toConfidence(): Double = (if (this > 1.0) this / 100.0 else this).coerceIn(0.01, 1.0)
+    private fun Double.toQuantity(category: MaterialCategory): String {
+        val safe = takeIf { isFinite() && this > 0.0 } ?: 1.0
+        return if (AnalysisCatalog.contractFor(category, com.rematerial.app.core.model.FieldId("quantity"))?.unit == com.rematerial.app.core.model.UnitCode.PCS) kotlin.math.round(safe).coerceAtLeast(1.0).toInt().toString() else "%.2f".format(java.util.Locale.US, safe)
+    }
 
     private fun String.toMaterialCategory(): MaterialCategory = when (trim().uppercase()) {
         "METAL", "LOGAM" -> MaterialCategory.METAL
@@ -214,6 +231,7 @@ fun interface AnalysisAuthorizationProvider {
 private data class ChatRequest(
     val message: String,
     val image: String? = null,
+    val images: List<String> = emptyList(),
     val model: String,
     val stream: Boolean = false,
     @SerialName("reasoning_effort") val reasoningEffort: String = "low",
@@ -230,6 +248,10 @@ private data class ChatEnvelope(
 private data class ClassificationReply(
     val category: String,
     @SerialName("confidence_percent") val confidencePercent: Double,
+    @SerialName("quantity_estimate") val quantityEstimate: Double = 1.0,
+    val condition: String = "unknown",
+    val contamination: String = "unknown",
+    @SerialName("follow_up_ids") val followUpIds: List<String> = emptyList(),
 )
 
 @Serializable

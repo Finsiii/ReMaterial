@@ -30,8 +30,9 @@ data class PhotoReference(
 data class InitialAnalysisRequest(
     val analysisId: AnalysisId,
     val photo: PhotoReference? = null,
+    val additionalPhotos: List<PhotoReference> = emptyList(),
     val manualCategory: MaterialCategory? = null,
-)
+) { val photos: List<PhotoReference> get() = listOfNotNull(photo) + additionalPhotos }
 
 @Serializable
 data class CategoryPrediction(
@@ -72,6 +73,7 @@ data class InitialAnalysisResponse(
     val analysisId: AnalysisId,
     val prediction: CategoryPrediction,
     val requestedFields: List<RequestedField>,
+    val suggestedValues: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -287,6 +289,7 @@ enum class AnalysisFlowPhase { SCAN, PREVIEW, CONFIRM, INPUTS, RESULT, IDEAS }
 data class AnalysisSession(
     val analysisId: AnalysisId,
     val photo: PhotoReference? = null,
+    val additionalPhotos: List<PhotoReference> = emptyList(),
     val initial: InitialAnalysisResponse? = null,
     val selectedCategory: MaterialCategory? = null,
     val answers: Map<String, FieldAnswer> = emptyMap(),
@@ -303,6 +306,7 @@ data class SavedAnalysisIdea(
     val optionId: ProductOptionId,
     val result: CompletedAnalysisResponse,
     val photo: PhotoReference? = null,
+    val additionalPhotos: List<PhotoReference> = emptyList(),
 )
 
 data class AnalysisPersistenceSnapshot(
@@ -336,14 +340,14 @@ object AnalysisCatalog {
         MaterialCategory.TEXTILE to listOf(f("width_m","Lebar",InspectionFieldType.DECIMAL,unit=UnitCode.M,min=0.0,max=100000.0),f("area_m2","Luas",InspectionFieldType.DECIMAL,unit=UnitCode.M2,min=.01,max=100000.0),f("piece_count","Jumlah lembar",InspectionFieldType.WHOLE,unit=UnitCode.PCS,min=1.0,max=100000.0),f("wet_mold","Lembap atau jamur",InspectionFieldType.CHOICE,true,choices=listOf("no","light","heavy")),f("oil_chemical","Minyak atau kimia",InspectionFieldType.CHOICE,true,choices=listOf("no","yes","unknown")),f("fiber_label","Label serat",InspectionFieldType.TEXT,maxLen=120),f("torn_area","Luas sobek",InspectionFieldType.DECIMAL,unit=UnitCode.M2,min=0.0,max=100000.0),f("color","Warna",InspectionFieldType.TEXT,maxLen=80)),
         MaterialCategory.ELECTRONICS to listOf(f("device_type","Jenis perangkat",InspectionFieldType.TEXT,true,maxLen=120),f("battery","Ada baterai?",InspectionFieldType.CHOICE,true,choices=listOf("no","yes","unknown")),f("battery_damage","Baterai rusak?",InspectionFieldType.CHOICE,true,choices=listOf("no","yes","unknown")),f("burn_marks","Ada bekas terbakar?",InspectionFieldType.CHOICE,true,choices=listOf("yes","no")),f("powered","Masih berdaya?",InspectionFieldType.CHOICE,true,choices=listOf("yes","no","unknown")),f("dismantled","Sudah dibongkar?",InspectionFieldType.CHOICE,choices=listOf("yes","no")),f("board_type","Jenis papan",InspectionFieldType.TEXT,maxLen=120)),
     )
-    val commonFields = (commonSchema.map(RequestedField::id) + FieldId("quantity")).toSet()
+    val commonFields = setOf(FieldId("quantity"), FieldId("condition"), FieldId("contamination"))
     val categoryFields = categorySchema.mapValues { (_, fields) -> fields.mapTo(linkedSetOf(), RequestedField::id) }
     val sourceIds = setOf(
         SourceId("rematerial-material-procedure"), SourceId("school-material-safety"),
     )
-    fun recognized(category: MaterialCategory): Set<FieldId> = commonFields + categoryFields.getValue(category)
+    fun recognized(category: MaterialCategory): Set<FieldId> = commonFields
     fun schemaFor(category: MaterialCategory, quantityUnit: UnitCode? = null): List<RequestedField> =
-        listOf(commonSchema.first(), quantityField(category, quantityUnit)) + commonSchema.drop(1) + categorySchema.getValue(category)
+        listOf(quantityField(category, quantityUnit), commonSchema[1], commonSchema[2])
 
     fun contractFor(category: MaterialCategory, id: FieldId): RequestedField? = schemaFor(category).firstOrNull { it.id == id }
     fun isCompatible(category: MaterialCategory, field: RequestedField): Boolean {
@@ -389,10 +393,9 @@ object AnalysisValidator {
             candidates.zipWithNext().all { (left, right) -> left.confidence >= right.confidence }
         val fields = response.requestedFields
         val ids = fields.map { it.id }
-        val requiredCommon = AnalysisCatalog.commonFields.filter { AnalysisCatalog.contractFor(response.prediction.category, it)?.required == true }
-        val requiredCategory = AnalysisCatalog.schemaFor(response.prediction.category).filter { it.required && it.id in AnalysisCatalog.categoryFields.getValue(response.prediction.category) }.map { it.id }
-        val contractsValid = ids.size == ids.distinct().size && requiredCommon.all { it in ids } &&
-            requiredCategory.all { it in ids } && fields.all { AnalysisCatalog.isCompatible(response.prediction.category, it) }
+        val contractsValid = fields.size <= 2 && ids.size == ids.distinct().size &&
+            fields.all { AnalysisCatalog.isCompatible(response.prediction.category, it) } &&
+            AnalysisCatalog.schemaFor(response.prediction.category).all { response.suggestedValues[it.id.value]?.isNotBlank() == true }
         return if (!contractsValid || !validRanking) {
             Result.Failure(DomainFailure.UnsupportedSchema)
         } else Result.Success(Unit)

@@ -139,15 +139,15 @@ private fun ReMaterialNavHost() {
                         ProductDraft(
                             optionId = option.optionId,
                             title = option.title,
-                            materialSummary = "Material terpilih dari analisis · minimum ${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
-                            minimumQuantity = "${option.minimumQuantity} ${option.minimumUnit.name.lowercase()}",
+                            materialSummary = "${option.requiredMaterial} terpilih dari hasil analisis ${analysisId.value.takeLast(8)}",
+                            minimumQuantity = "Perlu dikonfirmasi pengrajin",
                             analysisId = analysisId.value,
                             safetyAllowed = safetyOutcome != SafetyOutcome.BLOCK,
                             requiredCapabilities = capabilityKeys(option.requiredMaterial),
                             requiredTools = option.requiredToolIds,
                             requiredSkills = option.requiredSkillIds,
                             provisionalScore = option.provisionalProductScore,
-                            estimatedUsage = "${option.estimatedUsedQuantity} ${option.estimatedUsedUnit.name.lowercase()}",
+                            estimatedUsage = "Ditentukan setelah pengukuran pengrajin",
                         ),
                     )
                     navController.navigateUserDestination(Routes.Production)
@@ -157,6 +157,7 @@ private fun ReMaterialNavHost() {
         composable(Routes.Production) {
             ProductionRoute(
                 onBack = { navController.popBackStack() },
+                onChangeProduct = { navController.navigateUserDestination(Routes.Analysis) },
                 viewModel = productionViewModel,
             )
         }
