@@ -1,4 +1,20 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+val releaseSigningFile = rootProject.file("keystore.properties")
+val releaseSigningProperties = Properties().apply {
+    if (releaseSigningFile.isFile) releaseSigningFile.inputStream().use(::load)
+}
+fun releaseSigningValue(property: String, environment: String): String? =
+    releaseSigningProperties.getProperty(property)?.takeIf(String::isNotBlank)
+        ?: System.getenv(environment)?.takeIf(String::isNotBlank)
+
+val releaseStoreFile = releaseSigningValue("storeFile", "REMATERIAL_KEYSTORE_FILE")
+val releaseStorePassword = releaseSigningValue("storePassword", "REMATERIAL_KEYSTORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("keyAlias", "REMATERIAL_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("keyPassword", "REMATERIAL_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { !it.isNullOrBlank() }
 
 plugins {
     alias(libs.plugins.android.application)
@@ -25,8 +41,25 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+                storeType = releaseSigningValue("storeType", "REMATERIAL_KEYSTORE_TYPE") ?: "PKCS12"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
