@@ -10,15 +10,17 @@ import com.rematerial.app.feature.identity.domain.LoginRequest
 import com.rematerial.app.feature.identity.domain.Role
 import com.rematerial.app.core.model.Result
 import com.rematerial.app.core.model.getOrThrow
-import com.rematerial.app.feature.analysis.transport.AnalysisHttpDtos
-import com.rematerial.app.feature.analysis.transport.AnalysisMappers
 import com.rematerial.app.feature.analysis.data.HttpAiAnalysisGateway
+import com.rematerial.app.core.media.MediaPayloadReader
+import com.rematerial.app.core.model.AnalysisId
 import com.rematerial.app.core.model.DomainFailure
 import com.rematerial.app.core.model.FieldId
 import com.rematerial.app.core.model.MaterialCategory
+import com.rematerial.app.feature.analysis.domain.CompletedAnalysisRequest
+import com.rematerial.app.feature.analysis.domain.InitialAnalysisRequest
+import com.rematerial.app.feature.analysis.domain.PhotoReference
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpHeaders
@@ -91,35 +93,67 @@ class DomainContractsTest {
     }
 
     @Test
-    fun `http gateway maps typed response and unauthorized`() = runTest {
-        val body = Json.encodeToString(AnalysisHttpDtos.initialResponseSerializer, AnalysisMappers.toDto(AnalysisFixtures.metalHigh().initial))
-        val engine = MockEngine(MockEngineConfig().apply {
-            addHandler { request ->
-                if (request.url.encodedPath.endsWith("/initial")) {
-                    respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-                } else {
-                    respondError(HttpStatusCode.Unauthorized)
-                }
-            }
-        })
-        val gateway = HttpAiAnalysisGateway(HttpClient(engine), "https://api.example.test")
-        val response = gateway.start(AnalysisFixtures.initialRequest())
+    fun `http gateway sends photo to chat api and maps classification`() = runTest {
+        val body = """{"reply":"{\"category\":\"WOOD\",\"confidence_percent\":91}","conversation_id":"conv-1","message_id":"msg-1"}"""
+        val engine = MockEngine { request ->
+            assertEquals("/v1/chat", request.url.encodedPath)
+            respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        val gateway = HttpAiAnalysisGateway(
+            HttpClient(engine),
+            "https://api.example.test",
+            mediaPayloadReader = mediaReader(),
+        )
+        val response = gateway.start(photoRequest())
         assertTrue(response is Result.Success)
-        assertEquals(MaterialCategory.METAL, (response as Result.Success).value.prediction.category)
+        assertEquals(MaterialCategory.WOOD, (response as Result.Success).value.prediction.category)
+        assertTrue(response.value.requestedFields.isNotEmpty())
     }
 
     @Test
-    fun `http gateway maps unauthorized and malformed payload`() = runTest {
+    fun `http gateway enriches validated final result with ai science and products`() = runTest {
+        val reply = """{"science":[{"title":"Serat kayu masih layak","principle":"Arah serat dan kelembapan memengaruhi kekuatan sambungan.","interpretation":"Jawaban pengguna mendukung pemanfaatan awal sebagai produk non-struktural.","limitation":"Foto tidak membuktikan kadar air internal.","recommended_verification":"Ukur kelembapan dan periksa retak sebelum dipotong."}],"product_options":[{"title":"Rak Rempah Modular","explanation":"Potongan kayu dapat dirakit menjadi rak kecil dengan sambungan sederhana."},{"title":"Lampu Meja Kayu","explanation":"Kayu dapat menjadi dudukan lampu setelah keamanan kelistrikan diperiksa."},{"title":"Organizer Meja","explanation":"Sisa potongan cocok untuk kompartemen penyimpanan kecil."}]}"""
+        val body = Json.encodeToString(mapOf("reply" to reply, "conversation_id" to "conv-2", "message_id" to "msg-2"))
+        val gateway = HttpAiAnalysisGateway(
+            HttpClient(MockEngine { respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }),
+            "https://api.example.test",
+        )
+        val fixture = AnalysisFixtures.woodHigh()
+        val request = CompletedAnalysisRequest(AnalysisId("analysis-ai"), MaterialCategory.WOOD, fixture.completed.observations)
+
+        val response = gateway.complete(request)
+
+        assertTrue(response is Result.Success)
+        val completed = (response as Result.Success).value
+        assertEquals("Serat kayu masih layak", completed.science.first().title)
+        assertEquals("Rak Rempah Modular", completed.productOptions.first().title)
+        AnalysisValidator.validate(completed, fixture.initial.requestedFields).getOrThrow()
+    }
+
+    @Test
+    fun `http gateway maps unauthorized and malformed chat payload`() = runTest {
         val unauthorized = HttpAiAnalysisGateway(
             HttpClient(MockEngine { respondError(HttpStatusCode.Unauthorized) }),
             "https://api.example.test",
-        ).start(AnalysisFixtures.initialRequest())
+            mediaPayloadReader = mediaReader(),
+        ).start(photoRequest())
         assertEquals(DomainFailure.Unauthorized, (unauthorized as Result.Failure).error)
 
         val malformed = HttpAiAnalysisGateway(
             HttpClient(MockEngine { respond("{not-json", HttpStatusCode.OK) }),
             "https://api.example.test",
-        ).start(AnalysisFixtures.initialRequest())
+            mediaPayloadReader = mediaReader(),
+        ).start(photoRequest())
         assertEquals(DomainFailure.MalformedResponse, (malformed as Result.Failure).error)
+    }
+
+    private fun photoRequest() = InitialAnalysisRequest(
+        analysisId = AnalysisId("analysis-photo"),
+        photo = PhotoReference("media-1", "/private/photo.jpg", "image/jpeg", 3),
+    )
+
+    private fun mediaReader() = object : MediaPayloadReader {
+        override suspend fun read(photo: PhotoReference): Result<ByteArray> =
+            Result.Success(byteArrayOf(1, 2, 3))
     }
 }
