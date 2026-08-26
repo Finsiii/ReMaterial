@@ -108,6 +108,7 @@ class AnalysisViewModel @Inject constructor(
     private var activeJob: Job? = null
     private var operationGeneration = 0L
     private var pendingCommit: PendingCommit? = null
+    private var freshEntryRequested = false
 
     private data class PendingCommit(
         val next: AnalysisUiState,
@@ -120,6 +121,16 @@ class AnalysisViewModel @Inject constructor(
     )
 
     init { viewModelScope.launch { hydrate() } }
+
+    fun prepareForEntry() {
+        if (_state.value.hydrating) {
+            freshEntryRequested = true
+            return
+        }
+        if (_state.value.step == AnalysisStep.RESULT && _state.value.result != null) {
+            reset()
+        }
+    }
 
     fun importPhoto(uri: String) = importMedia(uri, false)
     fun importCapture(path: String) = importMedia(path, true)
@@ -363,12 +374,13 @@ class AnalysisViewModel @Inject constructor(
     fun reset() {
         if (_state.value.hydrating) return
         val previous = _state.value
-        val token = beginOperation { it.copy(loading = true, error = null, retryAction = null) }
+        val fresh = AnalysisUiState(hydrating = false, loading = true, savedIdeas = previous.savedIdeas)
+        val token = beginOperation { previous.copy(loading = true, error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
             when (val cleared = persistenceMutex.withLock { sessions.clearSession() }) {
                 is Result.Failure -> failIfCurrent(token, cleared.error.userMessage(), null)
                 is Result.Success -> if (isCurrent(token)) {
-                    _state.value = AnalysisUiState(hydrating = false)
+                    _state.value = fresh.copy(loading = false)
                     clearActive(token)
                     previous.photos.forEach { deleteIfUnreferenced(it) }
                 }
@@ -382,6 +394,10 @@ class AnalysisViewModel @Inject constructor(
                 is Result.Failure -> _state.value = AnalysisUiState(hydrating = false, error = snapshot.error.userMessage(), retryAction = null)
                 is Result.Success -> restore(snapshot.value)
             }
+        }
+        if (freshEntryRequested) {
+            freshEntryRequested = false
+            prepareForEntry()
         }
     }
 

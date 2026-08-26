@@ -18,7 +18,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,6 +85,7 @@ import coil3.compose.AsyncImage
 import com.rematerial.app.R
 import com.rematerial.app.core.designsystem.RematerialButton
 import com.rematerial.app.core.designsystem.RematerialColors
+import com.rematerial.app.core.designsystem.RematerialDockMetrics
 import com.rematerial.app.core.designsystem.RematerialField
 import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
@@ -108,12 +109,15 @@ import kotlinx.coroutines.launch
 fun AnalysisRoute(
     onClose: () -> Unit,
     onOpenArtisan: (ProductOption, AnalysisId, SafetyOutcome) -> Unit,
+    onCameraVisibilityChanged: (Boolean) -> Unit = {},
     viewModel: AnalysisViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error = state.error
     val context = LocalContext.current
     var cameraOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(cameraOpen) { onCameraVisibilityChanged(cameraOpen) }
+    DisposableEffect(Unit) { onDispose { onCameraVisibilityChanged(false) } }
     var cameraPermissionMessage by rememberSaveable { mutableStateOf(false) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { viewModel.importPhoto(it.toString()) } }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) cameraOpen = true else cameraPermissionMessage = true }
@@ -134,10 +138,11 @@ fun AnalysisRoute(
     Box(Modifier.fillMaxSize().background(RematerialColors.Canvas)) {
         AnimatedContent(
             targetState = state.step,
+            modifier = Modifier.padding(bottom = RematerialDockMetrics.reservedBottom),
             transitionSpec = {
                 val direction = if (state.motionDirection == AnalysisMotionDirection.FORWARD) 1 else -1
-                slideInHorizontally(tween(210)) { full -> full * direction } togetherWith
-                    slideOutHorizontally(tween(210)) { full -> -full * direction }
+                slideInHorizontally(spring(dampingRatio = 1f, stiffness = 560f)) { full -> full * direction } togetherWith
+                    slideOutHorizontally(spring(dampingRatio = 1f, stiffness = 560f)) { full -> -full * direction }
             },
             label = "analysis-step",
         ) { step ->
@@ -192,7 +197,12 @@ fun AnalysisRoute(
 private fun AnalysisErrorBanner(message: String, onRetry: (() -> Unit)?) {
     Box(Modifier.fillMaxSize()) {
         Surface(
-            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 18.dp).align(Alignment.BottomCenter),
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 18.dp)
+                .padding(bottom = RematerialDockMetrics.reservedBottom)
+                .align(Alignment.BottomCenter),
             color = Color(0xFFF4DDD7), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Color(0xFFD9A69A)),
         ) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

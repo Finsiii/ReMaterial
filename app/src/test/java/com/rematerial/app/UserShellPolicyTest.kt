@@ -20,9 +20,9 @@ class UserShellPolicyTest {
     fun `dock selection is derived only from dock visible routes`() {
         assertEquals(DockDestination.Beranda, userDockDestination("user-home"))
         assertEquals(DockDestination.Produksi, userDockDestination("production"))
+        assertEquals(DockDestination.Scan, userDockDestination("analysis"))
         assertEquals(DockDestination.Pasar, userDockDestination("market"))
         assertEquals(DockDestination.Akun, userDockDestination("account"))
-        assertNull(userDockDestination("analysis"))
         assertNull(userDockDestination("orders"))
         assertNull(userDockDestination("identity"))
     }

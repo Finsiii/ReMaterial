@@ -248,6 +248,53 @@ class AnalysisViewModelConcurrencyTest {
         assertEquals(AnalysisStep.INPUTS, recreated.state.value.step)
     }
 
+    @Test fun enteringAnalysisAfterCompletedResultStartsFreshSession() = runTest(dispatcher) {
+        val fixture = AnalysisFixtures.metalHigh()
+        val repository = FakeRepository(
+            session = AnalysisSession(
+                analysisId = fixture.completed.analysisId,
+                initial = fixture.initial,
+                selectedCategory = fixture.category,
+                answers = validAnswers(fixture.initial),
+                result = fixture.completed,
+                categoryConfirmed = true,
+                phase = AnalysisFlowPhase.RESULT,
+            ),
+        )
+        val viewModel = AnalysisViewModel(DelayedGateway(), FakeMediaStore(), repository)
+        advanceUntilIdle()
+
+        viewModel.prepareForEntry()
+        advanceUntilIdle()
+
+        assertEquals(AnalysisStep.SCAN, viewModel.state.value.step)
+        assertTrue(viewModel.state.value.result == null)
+        assertTrue(repository.currentSession == null)
+    }
+
+    @Test fun enteringAnalysisWhileInProgressResumesExistingSession() = runTest(dispatcher) {
+        val fixture = AnalysisFixtures.metalHigh()
+        val repository = FakeRepository(
+            session = AnalysisSession(
+                analysisId = fixture.completed.analysisId,
+                initial = fixture.initial,
+                selectedCategory = fixture.category,
+                answers = validAnswers(fixture.initial),
+                categoryConfirmed = true,
+                phase = AnalysisFlowPhase.INPUTS,
+            ),
+        )
+        val viewModel = AnalysisViewModel(DelayedGateway(), FakeMediaStore(), repository)
+        advanceUntilIdle()
+
+        viewModel.prepareForEntry()
+        advanceUntilIdle()
+
+        assertEquals(AnalysisStep.INPUTS, viewModel.state.value.step)
+        assertEquals(fixture.completed.analysisId, viewModel.state.value.analysisId)
+        assertEquals(AnalysisFlowPhase.INPUTS, repository.currentSession?.phase)
+    }
+
     private fun initialFor(request: InitialAnalysisRequest): InitialAnalysisResponse {
         val category = request.manualCategory ?: MaterialCategory.METAL
         return AnalysisFixtures.forCategory(category).initial.copy(analysisId = request.analysisId)

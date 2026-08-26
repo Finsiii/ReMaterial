@@ -218,9 +218,9 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
 }
 
 @Composable private fun ProductCard(product: MarketplaceProduct, onClick: (MarketplaceProduct) -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onClick(product) }, color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+    Surface(Modifier.fillMaxWidth().padding(bottom = 14.dp).clickable(role = Role.Button) { onClick(product) }, color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
         Column {
-            MarketplaceProductImage(product, Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)))
+            MarketplaceProductImage(product, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
             Column(Modifier.padding(16.dp)) {
                 Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = RematerialColors.Bronze)
                 Spacer(Modifier.height(5.dp)); Text(product.title, style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)

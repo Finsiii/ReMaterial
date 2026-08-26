@@ -158,7 +158,7 @@ private fun DiscoveryScreen(
 
 @Composable
 private fun MapCanvas(artisans: List<ArtisanProfile>, modifier: Modifier) {
-    Surface(modifier, color = Color(0xFFD8DED5), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+    Surface(modifier, color = Color(0xFFD8DED5), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
         Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription = "Peta ilustrasi area pengrajin" }) {
             val roads = listOf(
@@ -189,7 +189,7 @@ private fun MapCanvas(artisans: List<ArtisanProfile>, modifier: Modifier) {
 
 @Composable
 private fun ArtisanListRow(artisan: ArtisanProfile, onClick: (ArtisanProfile) -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onClick(artisan) }, color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+    Surface(Modifier.fillMaxWidth().clickable(role = Role.Button) { onClick(artisan) }, color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(artisan.name, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink, modifier = Modifier.weight(1f))

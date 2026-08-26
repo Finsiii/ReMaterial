@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -131,7 +132,7 @@ private fun RoleOptionRow(option: RoleOption, onClick: () -> Unit) {
             .clickable(role = SemanticsRole.Button, onClick = onClick)
             .semantics { contentDescription = "Pilih ${option.title}" },
         color = RematerialColors.Surface,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, RematerialColors.Line),
     ) {
         Row(
@@ -141,7 +142,7 @@ private fun RoleOptionRow(option: RoleOption, onClick: () -> Unit) {
             Surface(
                 modifier = Modifier.size(44.dp),
                 color = RematerialColors.BronzeSoft,
-                shape = RoundedCornerShape(12.dp),
+                shape = CircleShape,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     RematerialIcon(option.icon, null, Modifier.size(21.dp), RematerialColors.DeepForest)

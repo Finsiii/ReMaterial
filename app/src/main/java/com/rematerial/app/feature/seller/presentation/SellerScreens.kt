@@ -141,7 +141,7 @@ private fun sellerIsBackward(current: SellerPage, target: SellerPage): Boolean =
 
 @Composable private fun SellerDock(page: SellerPage, go: (SellerPage) -> Unit) {
     Box(Modifier.fillMaxSize()) {
-        Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding, bottom = RematerialDockMetrics.bottomGap), color = RematerialColors.Surface, shape = RoundedCornerShape(22.dp), shadowElevation = 8.dp, border = BorderStroke(1.dp, RematerialColors.Line)) {
+        Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding, bottom = RematerialDockMetrics.bottomGap), color = RematerialColors.Glass, shape = RoundedCornerShape(30.dp), shadowElevation = 16.dp, border = BorderStroke(1.dp, Color.White.copy(alpha = .8f))) {
             Row(Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
                 SellerTab.entries.forEach { tab ->
                     if (tab == SellerTab.ADD) {
