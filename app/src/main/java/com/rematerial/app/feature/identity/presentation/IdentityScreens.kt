@@ -83,7 +83,7 @@ private data class RoleOption(
 )
 
 private val roleOptions = listOf(
-    RoleOption(Role.USER, "Pengguna", "Analisis bahan dan pilih produk.", RematerialIcons.UserRound),
+    RoleOption(Role.USER, "Pengguna", "Punya bahan. Temukan kemungkinan barunya.", RematerialIcons.UserRound),
     RoleOption(Role.ARTISAN, "Pengrajin", "Wujudkan karya yang sudah dipetakan.", RematerialIcons.Hammer),
     RoleOption(Role.SELLER, "Penjual", "Tawarkan karya ke orang yang tepat.", RematerialIcons.Store),
 )
@@ -100,7 +100,7 @@ private fun RoleSelectionScreen(onRoleSelected: (Role) -> Unit) {
     ) {
         Text("ReMaterial", style = MaterialTheme.typography.titleLarge, color = RematerialColors.DeepForest)
         Spacer(Modifier.height(58.dp))
-        Text("Pilih jenis akun", style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink)
+        Text("Mulai dari peranmu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
         Spacer(Modifier.height(10.dp))
         Text(
             "Satu ruang untuk memahami bahan, membuat karya, dan menemukan pasarnya.",

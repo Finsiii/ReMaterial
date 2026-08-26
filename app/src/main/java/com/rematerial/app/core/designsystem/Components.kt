@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,7 +27,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -56,10 +54,10 @@ import androidx.compose.ui.unit.dp
 
 /** Shared footprint used by every floating dock and by screens reserving space for it. */
 object RematerialDockMetrics {
-    val horizontalPadding = 0.dp
-    val outerVerticalPadding = 0.dp
-    val surfaceHeight = 64.dp
-    val bottomGap = 0.dp
+    val horizontalPadding = 14.dp
+    val outerVerticalPadding = 8.dp
+    val surfaceHeight = 74.dp
+    val bottomGap = 8.dp
     val minHitTarget = 48.dp
     val reservedBottom = surfaceHeight + outerVerticalPadding + bottomGap
 
@@ -103,13 +101,14 @@ fun RematerialButton(
     val foreground = if (enabled) RematerialColors.Surface else RematerialColors.Muted
     Surface(
         modifier = modifier
-            .height(50.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .height(54.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = text },
         color = background,
         contentColor = foreground,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = if (enabled) 2.dp else 0.dp,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -158,9 +157,9 @@ fun RematerialField(
             keyboardActions = keyboardActions,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(RematerialColors.Surface)
-                .border(BorderStroke(1.dp, RematerialColors.Line), RoundedCornerShape(12.dp))
+                .border(BorderStroke(1.dp, RematerialColors.Line), RoundedCornerShape(18.dp))
                 .semantics { contentDescription = label }
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             decorationBox = { innerTextField ->
@@ -185,14 +184,16 @@ fun RematerialTopBar(
     onAction: (() -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().height(56.dp),
+        modifier = modifier.fillMaxWidth().height(64.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         onBack?.let { callback ->
             Box(
                 modifier = Modifier
                     .size(RematerialDockMetrics.minHitTarget)
+                    .shadow(3.dp, androidx.compose.foundation.shape.CircleShape, clip = false)
                     .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(RematerialColors.Glass)
                     .clickable(role = Role.Button, onClick = callback)
                     .semantics { contentDescription = "Kembali" },
                 contentAlignment = Alignment.Center,
@@ -211,7 +212,9 @@ fun RematerialTopBar(
             Box(
                 modifier = Modifier
                     .size(RematerialDockMetrics.minHitTarget)
+                    .shadow(3.dp, androidx.compose.foundation.shape.CircleShape, clip = false)
                     .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(RematerialColors.Glass)
                     .clickable(role = Role.Button, onClick = onAction)
                     .semantics { contentDescription = actionDescription ?: "Aksi" },
                 contentAlignment = Alignment.Center,
@@ -234,64 +237,21 @@ fun RematerialListRow(
     val rowModifier = modifier
         .fillMaxWidth()
         .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-        .padding(vertical = 12.dp)
+        .padding(vertical = 14.dp)
     Row(rowModifier, verticalAlignment = Alignment.CenterVertically) {
         leadingIcon?.let {
-            RematerialIcon(it, null, Modifier.size(20.dp), RematerialColors.DeepForest)
-            Spacer(Modifier.width(12.dp))
+            Surface(shape = androidx.compose.foundation.shape.CircleShape, color = RematerialColors.ControlFill) {
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    RematerialIcon(it, null, Modifier.size(19.dp), RematerialColors.DeepForest)
+                }
+            }
+            Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
             supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }
         }
         trailingIcon?.let { RematerialIcon(it, null, Modifier.size(18.dp), RematerialColors.Muted) }
-    }
-}
-
-@Composable
-fun SectionHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    supportingText: String? = null,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
-            supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }
-        }
-        if (actionLabel != null && onAction != null) {
-            Text(
-                actionLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = RematerialColors.DeepForest,
-                modifier = Modifier.sizeIn(minHeight = 44.dp).clickable(role = Role.Button, onClick = onAction).padding(start = 12.dp, top = 12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-fun CompactCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Surface(
-        modifier = modifier,
-        color = RematerialColors.Surface,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, RematerialColors.Line),
-    ) {
-        Column(Modifier.padding(14.dp), content = content)
-    }
-}
-
-@Composable
-fun InfoRow(label: String, value: String, modifier: Modifier = Modifier, emphasized: Boolean = false) {
-    Row(modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.weight(1f))
-        Text(value, style = if (emphasized) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium, color = if (emphasized) RematerialColors.DeepForest else RematerialColors.Ink)
     }
 }
 
@@ -331,14 +291,23 @@ fun RematerialDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = RematerialDockMetrics.horizontalPadding),
+            .padding(horizontal = RematerialDockMetrics.horizontalPadding)
+            .padding(
+                top = RematerialDockMetrics.outerVerticalPadding,
+                bottom = RematerialDockMetrics.bottomGap,
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(modifier = Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight), color = RematerialColors.Surface) {
-            Column {
-                HorizontalDivider(color = RematerialColors.Line)
-                Row(
-                modifier = Modifier.fillMaxWidth().weight(1f).selectableGroup(),
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight),
+            color = RematerialColors.Glass,
+            shape = RoundedCornerShape(30.dp),
+            shadowElevation = 16.dp,
+            tonalElevation = 0.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = .8f)),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight().selectableGroup(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
@@ -353,7 +322,9 @@ fun RematerialDock(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
+                            .padding(horizontal = 2.dp, vertical = 7.dp)
+                            .clip(RoundedCornerShape(23.dp))
+                            .background(activeColor)
                             .sizeIn(minHeight = RematerialDockMetrics.minHitTarget)
                             .selectable(
                                 selected = active,
@@ -365,19 +336,19 @@ fun RematerialDock(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         val foreground = if (active && destination == DockDestination.Scan) RematerialColors.Surface else if (active) RematerialColors.DeepForest else RematerialColors.Muted
-                        Box(Modifier.width(28.dp).height(2.dp).background(if (active && !filled) RematerialColors.DeepForest else Color.Transparent))
+                        RematerialIcon(destination.icon, null, Modifier.size(if (destination.isPrimary) 22.dp else 20.dp), foreground)
                         Spacer(Modifier.height(4.dp))
-                        Box(
-                            Modifier.size(width = 34.dp, height = 28.dp).clip(RoundedCornerShape(9.dp)).background(activeColor),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            RematerialIcon(destination.icon, null, Modifier.size(20.dp), foreground)
-                        }
-                        Spacer(Modifier.height(1.dp))
                         Text(destination.label, style = MaterialTheme.typography.labelSmall, color = foreground)
+                        Spacer(Modifier.height(3.dp))
+                        Box(
+                            Modifier
+                                .width(18.dp)
+                                .height(2.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (active && !filled) RematerialColors.Bronze else Color.Transparent),
+                        )
                     }
                 }
-            }
             }
         }
     }

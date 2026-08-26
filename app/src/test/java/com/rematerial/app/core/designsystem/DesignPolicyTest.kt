@@ -88,21 +88,7 @@ class DesignPolicyTest {
         assertTrue(dock.contains("selectableGroup()"))
         assertTrue(dock.contains("selectable("))
         assertTrue(dock.contains("contentDescription = destination.label"))
-        assertFalse(dock.contains("RematerialColors.Glass"))
-        assertFalse(dock.contains("shadowElevation = 16.dp"))
         assertTrue(DockDestination.entries.all { it.label.isNotBlank() })
-    }
-
-    @Test
-    fun `design system exposes compact consumer content primitives`() {
-        val sourceRoot = Paths.get(
-            System.getProperty("rematerial.mainSourceDir")
-                ?: error("Gradle must provide rematerial.mainSourceDir for source policy checks"),
-        )
-        val components = sourceRoot.resolve("com/rematerial/app/core/designsystem/Components.kt").toFile().readText()
-        assertTrue(components.contains("fun SectionHeader("))
-        assertTrue(components.contains("fun CompactCard("))
-        assertTrue(components.contains("fun InfoRow("))
     }
 
     private fun readKotlin(

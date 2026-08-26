@@ -189,26 +189,46 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
     ) {
         item {
             RematerialTopBar("Pasar", actionIcon = RematerialIcons.ShoppingBag, actionDescription = "Keranjang", onAction = onCart)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(18.dp))
+            Text("Benda dengan\ncerita baru.", style = MaterialTheme.typography.displayLarge, color = RematerialColors.Ink)
+            Spacer(Modifier.height(8.dp))
+            Text("Temukan karya yang memberi umur kedua pada material.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+            Spacer(Modifier.height(20.dp))
             RematerialField(state.query, onSearch, "Cari di pasar", placeholder = "Cari produk atau material", modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 CategoryLink("Semua", state.category == null) { onCategory(null) }
                 listOf("Logam", "Kayu", "Tekstil").forEach { category -> CategoryLink(category, state.category == category) { onCategory(category) } }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(18.dp))
+            if (state.query.isBlank() && state.category == null && state.products.isNotEmpty()) {
+                MarketEditorialPanel(state.products.size)
+                Spacer(Modifier.height(24.dp))
+            }
             if (state.products.isEmpty()) {
                 Text("Belum ada karya yang cocok.", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
                 Spacer(Modifier.height(6.dp)); Text("Coba kata kunci atau kategori lain.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
             } else {
-                Text(if (state.query.isBlank() && state.category == null) "Rekomendasi" else "Hasil pencarian", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                Text(if (state.query.isBlank() && state.category == null) "Pilihan minggu ini" else "Hasil pencarian", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
                 Spacer(Modifier.height(12.dp))
             }
         }
-        items(state.products.chunked(2)) { rowProducts ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                rowProducts.forEach { product -> ProductCard(product, onProduct, Modifier.weight(1f)) }
-                if (rowProducts.size == 1) Spacer(Modifier.weight(1f))
+        items(state.products, key = { it.id }) { ProductCard(it, onProduct) }
+    }
+}
+
+@Composable
+private fun MarketEditorialPanel(productCount: Int) {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(24.dp), shadowElevation = 3.dp) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Karya yang bisa ditelusuri", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Surface)
+                Spacer(Modifier.height(5.dp))
+                Text("Bahan, studio, dan cerita pembuatannya hadir dalam satu detail.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Surface.copy(alpha = .72f))
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(productCount.toString().padStart(2, '0'), style = MaterialTheme.typography.displaySmall, color = RematerialColors.BronzeSoft)
+                Text("karya pilihan", style = MaterialTheme.typography.labelSmall, color = RematerialColors.Surface.copy(alpha = .68f))
             }
         }
     }
@@ -218,15 +238,15 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
     Text(label, style = MaterialTheme.typography.labelLarge, color = if (active) RematerialColors.DeepForest else RematerialColors.Muted, modifier = Modifier.sizeIn(minHeight = 48.dp).selectable(selected = active, role = Role.Tab, onClick = onClick).padding(vertical = 8.dp).semantics { contentDescription = "Filter kategori $label" })
 }
 
-@Composable private fun ProductCard(product: MarketplaceProduct, onClick: (MarketplaceProduct) -> Unit, modifier: Modifier = Modifier) {
-    Surface(modifier.clickable(role = Role.Button) { onClick(product) }, color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+@Composable private fun ProductCard(product: MarketplaceProduct, onClick: (MarketplaceProduct) -> Unit) {
+    Surface(Modifier.fillMaxWidth().padding(bottom = 14.dp).clickable(role = Role.Button) { onClick(product) }, color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
         Column {
-            MarketplaceProductImage(product, Modifier.fillMaxWidth().height(132.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)))
-            Column(Modifier.padding(12.dp)) {
+            MarketplaceProductImage(product, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
+            Column(Modifier.padding(16.dp)) {
                 Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = RematerialColors.Bronze)
-                Spacer(Modifier.height(4.dp)); Text(product.title, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink, maxLines = 2)
-                Spacer(Modifier.height(7.dp)); Text(rupiah(product.price), style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest)
-                Spacer(Modifier.height(3.dp)); Text(product.location, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, maxLines = 1)
+                Spacer(Modifier.height(5.dp)); Text(product.title, style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                Spacer(Modifier.height(4.dp)); Text("${product.seller.name} · ${product.location}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                Spacer(Modifier.height(10.dp)); Text(rupiah(product.price), style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest)
             }
         }
     }
@@ -297,7 +317,7 @@ private fun OrderHistoryScreen(
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp).padding(bottom = bottom)) {
         RematerialTopBar("Pesanan", onBack = onBack)
         Spacer(Modifier.height(18.dp))
-        Text("Riwayat belanja", style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink)
+        Text("Perjalanan belanjamu.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
         Spacer(Modifier.height(8.dp))
         Text("Riwayat pesanan dari studio yang kamu pilih.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
         Spacer(Modifier.height(22.dp))
@@ -352,7 +372,7 @@ fun UserAccountRoute(
                 Spacer(Modifier.height(26.dp))
                 Text("Ruangmu", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
                 Spacer(Modifier.height(10.dp))
-                Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+                Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         RematerialListRow("Analisis material", supportingText = "Lihat material yang pernah dipetakan", leadingIcon = RematerialIcons.Camera, onClick = onAnalysis)
                         RematerialListRow("Produksi", supportingText = "Pantau karya yang sedang dibuat", leadingIcon = RematerialIcons.Hammer, onClick = onProduction)
@@ -378,7 +398,7 @@ fun UserAccountRoute(
 
 @Composable
 private fun AccountIdentityPanel(session: Session) {
-    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(16.dp)) {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
                 Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {

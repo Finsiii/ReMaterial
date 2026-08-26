@@ -235,11 +235,11 @@ class DemoCommerceStore @Inject constructor() {
     }
 
     private fun seedListings() = listOf(
-        SellerListing("p-copper", nusa.id, "Lampu Tembaga Senja", "Tembaga reclaimed dari kabel industri", "Kap lampu hangat dengan karakter permukaan yang tidak pernah sama.", 485000, 7, "Dibuat dan dikirim dalam 3–5 hari", "Bandung", imageRes = R.drawable.product_copper_lamp, category = "Logam", featured = true, state = ListingState.PUBLISHED),
-        SellerListing("p-oak", nusa.id, "Tray Kayu Sisa", "Papan kayu jati dari bongkaran rumah", "Tray sederhana dengan tepi lembut, selesai dengan minyak natural.", 275000, 12, "Siap dikirim besok", "Bandung", imageRes = R.drawable.product_wood_tray, category = "Kayu", featured = true, state = ListingState.PUBLISHED),
+        SellerListing("p-copper", nusa.id, "Lampu Tembaga Senja", "Tembaga reclaimed dari kabel industri", "Kap lampu hangat dengan karakter permukaan yang tidak pernah sama.", 485000, 7, "Dibuat dan dikirim dalam 3–5 hari", "Bandung", imageRes = R.drawable.material_metal, category = "Logam", featured = true, state = ListingState.PUBLISHED),
+        SellerListing("p-oak", nusa.id, "Tray Kayu Sisa", "Papan kayu jati dari bongkaran rumah", "Tray sederhana dengan tepi lembut, selesai dengan minyak natural.", 275000, 12, "Siap dikirim besok", "Bandung", imageRes = R.drawable.material_wood, category = "Kayu", featured = true, state = ListingState.PUBLISHED),
         SellerListing("p-metal-book", nusa.id, "Bookend Arang", "Aluminium pasca produksi", "Sepasang bookend bertekstur yang menjaga rak tetap tenang.", 320000, 4, "Dibuat dalam 4 hari", "Bandung", imageRes = R.drawable.material_metal, category = "Logam", state = ListingState.PAUSED),
-        SellerListing("p-weave", serat.id, "Tas Anyam Senyap", "Potongan tekstil deadstock", "Tas ringan yang disusun dari potongan kain terselamatkan.", 189000, 18, "Dikirim 1–2 hari", "Yogyakarta", imageRes = R.drawable.product_woven_bag, category = "Tekstil", featured = true, state = ListingState.PUBLISHED),
-        SellerListing("p-textile-pouch", serat.id, "Pouch Sisa Tenun", "Sisa kain tenun produksi", "Pouch kecil berlapis kanvas untuk benda esensial.", 145000, 20, "Siap dikirim besok", "Yogyakarta", imageRes = R.drawable.product_textile_pouch, category = "Tekstil", state = ListingState.PUBLISHED),
+        SellerListing("p-weave", serat.id, "Tas Anyam Senyap", "Potongan tekstil deadstock", "Tas ringan yang disusun dari potongan kain terselamatkan.", 189000, 18, "Dikirim 1–2 hari", "Yogyakarta", imageRes = R.drawable.material_textile, category = "Tekstil", featured = true, state = ListingState.PUBLISHED),
+        SellerListing("p-textile-pouch", serat.id, "Pouch Sisa Tenun", "Sisa kain tenun produksi", "Pouch kecil berlapis kanvas untuk benda esensial.", 145000, 20, "Siap dikirim besok", "Yogyakarta", imageRes = R.drawable.material_textile, category = "Tekstil", state = ListingState.PUBLISHED),
     )
 
     private fun seedOrders(): List<MarketplaceOrder> {

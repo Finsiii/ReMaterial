@@ -91,12 +91,9 @@ import com.rematerial.app.core.designsystem.RematerialIcon
 import com.rematerial.app.core.designsystem.RematerialIcons
 import com.rematerial.app.core.designsystem.RematerialProgress
 import com.rematerial.app.core.designsystem.RematerialTopBar
-import com.rematerial.app.core.designsystem.SectionHeader
-import com.rematerial.app.core.designsystem.InfoRow
 import com.rematerial.app.core.media.MediaUriHelper
 import com.rematerial.app.core.model.MaterialCategory
 import com.rematerial.app.core.model.AnalysisId
-import com.rematerial.app.core.model.InspectionValue
 import com.rematerial.app.core.model.SafetyOutcome
 import com.rematerial.app.feature.analysis.domain.InspectionFieldType
 import com.rematerial.app.feature.analysis.domain.AnalysisConfirmation
@@ -221,20 +218,33 @@ private fun AnalysisErrorBanner(message: String, onRetry: (() -> Unit)?) {
 @Composable
 private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> Unit, onManual: (MaterialCategory) -> Unit, onSavedIdeas: () -> Unit, cameraPermissionDenied: Boolean, onDismissPermission: () -> Unit) {
     var showManual by rememberSaveable { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 18.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { RematerialTopBar("Scan bahan", onBack = onClose) }
+    LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        item { RematerialTopBar("Scan material", onBack = onClose) }
         item {
-            Text("Scan bahan", style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink)
-            Text("Tambahkan minimal 5 foto untuk dianalisis.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            Spacer(Modifier.height(4.dp)); Text("Beri materialmu arah baru", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
+            Spacer(Modifier.height(8.dp)); Text("Mulai dari beberapa foto. ReMaterial membaca kondisinya, lalu menyiapkan pilihan benda yang masuk akal.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+        }
+        item { ScanJourneyPanel() }
+        item {
+            Column {
+                Text("Mulai analisis", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(10.dp))
+                Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line), shadowElevation = 2.dp) {
+                    Column {
+                        ScanChoice("Ambil foto sekarang", "Kamera dengan panduan frame", RematerialIcons.Camera, onCamera, primary = true)
+                        HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = RematerialColors.Line)
+                        ScanChoice("Pilih dari galeri", "Gunakan beberapa foto yang sudah ada", RematerialIcons.Upload, onPick)
+                    }
+                }
+            }
         }
         item {
-            Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
-                Column {
-                    ScanChoice("Ambil foto", "Buka kamera", RematerialIcons.Camera, onCamera)
-                    HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = RematerialColors.Line)
-                    ScanChoice("Pilih dari galeri", "Gunakan foto yang tersedia", RematerialIcons.Upload, onPick)
-                    HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = RematerialColors.Line)
-                    ScanChoice("Pilih manual", "Tentukan jenis bahan", RematerialIcons.Search) { showManual = true }
+            Column {
+                Text("Cara lain", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ScanShortcut("Pilih manual", "Tanpa foto", RematerialIcons.Search, Modifier.weight(1f)) { showManual = true }
+                    ScanShortcut("Ide tersimpan", "Buka kembali", RematerialIcons.Hammer, Modifier.weight(1f), onSavedIdeas)
                 }
             }
         }
@@ -250,28 +260,13 @@ private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> 
                 }
             }
         }
-        item {
-            Row(
-                Modifier.fillMaxWidth().background(RematerialColors.BronzeSoft, RoundedCornerShape(12.dp)).padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RematerialIcon(RematerialIcons.Camera, null, Modifier.size(18.dp), RematerialColors.DeepForest)
-                Text("Foto bentuk, permukaan, sisi, dan bagian yang rusak.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Ink, modifier = Modifier.padding(start = 10.dp))
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onSavedIdeas).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                RematerialIcon(RematerialIcons.History, null, Modifier.size(20.dp), RematerialColors.DeepForest)
-                Text("Ide tersimpan", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 12.dp))
-                RematerialIcon(RematerialIcons.ChevronRight, null, Modifier.size(18.dp), RematerialColors.Muted)
-            }
-        }
+        item { PhotoReadingGuide() }
         if (showManual) item {
-            Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
-                Column(Modifier.padding(14.dp)) {
+            Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+                Column(Modifier.padding(18.dp)) {
                     Text("Kategori material", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(8.dp))
                     MaterialCategory.entries.forEach { category ->
-                        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onManual(category) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onManual(category) }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(category.displayName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); RematerialIcon(RematerialIcons.ArrowRight, null, Modifier.size(18.dp), RematerialColors.Muted)
                         }
                     }
@@ -282,13 +277,74 @@ private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> 
 }
 
 @Composable
-private fun ScanChoice(title: String, supporting: String, icon: Int, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).background(RematerialColors.ControlFill, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                RematerialIcon(icon, null, Modifier.size(20.dp), RematerialColors.DeepForest)
+private fun ScanJourneyPanel() {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Lima sudut, satu gambaran utuh", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Surface)
+                    Spacer(Modifier.height(5.dp))
+                    Text("AI membandingkan detail yang terlihat di setiap foto.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Surface.copy(alpha = .72f))
+                }
+                Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { RematerialIcon(RematerialIcons.Camera, null, Modifier.size(21.dp), Color.White) }
+                }
             }
-            Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }
-            RematerialIcon(RematerialIcons.ChevronRight, null, Modifier.size(18.dp), RematerialColors.Muted)
+            Spacer(Modifier.height(20.dp))
+            Row(Modifier.fillMaxWidth()) {
+                JourneyStep("01", "Bentuk", Modifier.weight(1f))
+                JourneyStep("02", "Permukaan", Modifier.weight(1f))
+                JourneyStep("03", "Detail", Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun JourneyStep(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(number, style = MaterialTheme.typography.labelSmall, color = RematerialColors.BronzeSoft)
+        Spacer(Modifier.height(3.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = RematerialColors.Surface)
+    }
+}
+
+@Composable
+private fun ScanChoice(title: String, supporting: String, icon: Int, onClick: () -> Unit, primary: Boolean = false) {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(48.dp), color = if (primary) RematerialColors.DeepForest else RematerialColors.BronzeSoft, shape = RoundedCornerShape(15.dp)) { Box(contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(21.dp), if (primary) Color.White else RematerialColors.DeepForest) } }
+            Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }
+            RematerialIcon(RematerialIcons.ArrowRight, null, Modifier.size(18.dp), RematerialColors.Muted)
+    }
+}
+
+@Composable
+private fun ScanShortcut(title: String, supporting: String, icon: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(modifier.height(132.dp).clickable(role = Role.Button, onClick = onClick), color = RematerialColors.Surface, shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+        Column(Modifier.padding(16.dp)) {
+            Surface(shape = CircleShape, color = RematerialColors.ControlFill) {
+                Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(18.dp), RematerialColors.DeepForest) }
+            }
+            Spacer(Modifier.weight(1f))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+            Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+        }
+    }
+}
+
+@Composable
+private fun PhotoReadingGuide() {
+    Surface(color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(22.dp)) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = RematerialColors.Surface.copy(alpha = .72f)) {
+                Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) { RematerialIcon(RematerialIcons.Search, null, Modifier.size(19.dp), RematerialColors.DeepForest) }
+            }
+            Column(Modifier.padding(start = 14.dp)) {
+                Text("Buat detail mudah terbaca", style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+                Spacer(Modifier.height(3.dp))
+                Text("Gunakan cahaya merata, dekatkan kamera, dan tampilkan seluruh permukaan.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+            }
+        }
     }
 }
 
@@ -530,41 +586,45 @@ private fun SavedIdeasScreen(ideas: List<SavedAnalysisIdea>, onBack: () -> Unit,
 @Composable
 private fun ResultScreen(state: AnalysisUiState, onClose: () -> Unit, onOpenArtisan: (ProductOption) -> Unit, onSelect: (String) -> Unit, onSave: () -> Unit) {
     val result = state.result ?: return; var showTechnical by rememberSaveable { mutableStateOf(false) }; val selected = result.productOptions.firstOrNull { it.optionId.value == state.selectedOptionId }
-    val condition = result.observations.firstOrNull { it.fieldId.value == "condition" }?.value
-        .let { (it as? InspectionValue.Choice)?.value }
-        ?.let(AnalysisPresentation::choice) ?: "Perlu diperiksa"
-    val usable = result.mathematics.firstOrNull { it.formulaId.contains("usable") }
     LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = 32.dp)) {
         item { RematerialTopBar("Hasil analisis", onBack = onClose) }
         item {
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                state.photoUri?.let { uri -> AsyncImage(model = uri, contentDescription = "Foto material", modifier = Modifier.size(92.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop); Spacer(Modifier.width(16.dp)) }
-                Column(Modifier.weight(1f)) {
-                    Text(result.category.displayName, style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink)
-                    Spacer(Modifier.height(5.dp))
-                    Text("Kecocokan ${(result.confidence * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest)
-                    Text(condition, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
-                }
-            }
             Spacer(Modifier.height(14.dp))
-            Surface(Modifier.fillMaxWidth(), color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    InfoRow("Bahan layak", usable?.let { "${formatAmount(it.result)} ${AnalysisPresentation.unit(it.unit)}" } ?: "Perlu diukur")
-                    HorizontalDivider(color = RematerialColors.Line)
-                    InfoRow("Kondisi", condition)
-                    HorizontalDivider(color = RematerialColors.Line)
-                    InfoRow("Risiko", AnalysisPresentation.safetyTitle(result.safety.outcome))
+            state.photoUri?.let { uri -> AsyncImage(model = uri, contentDescription = "Foto material", modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Crop); Spacer(Modifier.height(16.dp)) }
+            Surface(Modifier.fillMaxWidth(), color = RematerialColors.DeepForest, shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Apa yang kami temukan", style = MaterialTheme.typography.labelLarge, color = RematerialColors.BronzeSoft)
+                    Spacer(Modifier.height(6.dp)); Text(result.category.displayName, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Surface)
+                    Text("Perkiraan kecocokan ${(result.confidence * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = RematerialColors.BronzeSoft)
+                    Spacer(Modifier.height(8.dp)); Text(AnalysisPresentation.categoryIntro(result.category), style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Surface.copy(alpha = .82f))
                 }
             }
         }
-        item { Spacer(Modifier.height(22.dp)); SectionHeader("Rekomendasi produk", supportingText = "Pilih produk yang ingin dibuat"); Spacer(Modifier.height(10.dp)) }
+        item {
+            Spacer(Modifier.height(14.dp))
+            val usable = result.mathematics.firstOrNull { it.formulaId.contains("usable") }
+            ResultSection(
+                "Perkiraan bahan yang bisa dipakai",
+                usable?.let { "Sekitar ${"%.2f".format(it.result)} ${AnalysisPresentation.unit(it.unit)} dari jumlah yang dicatat. ${it.limitations}" }
+                    ?: "Jumlah yang dapat dipakai perlu diukur ulang sebelum produksi.",
+                RematerialColors.BronzeSoft,
+            )
+        }
+        item { Spacer(Modifier.height(22.dp)); Text("Pilihan produk", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink); Text("Pilih satu ide untuk melihat langkah berikutnya.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(10.dp)) }
         if (result.productOptions.isEmpty()) item { ResultSection("Belum ada ide yang aman", "Lengkapi pemeriksaan keselamatan sebelum mencari bentuk baru untuk material ini.", RematerialColors.BronzeSoft) } else items(result.productOptions) { option -> ProductOptionCard(option, option.optionId.value == state.selectedOptionId) { onSelect(option.optionId.value) } }
-        item { Spacer(Modifier.height(10.dp)); val safety = result.safety; Surface(Modifier.fillMaxWidth(), color = if (safety.outcome == SafetyOutcome.BLOCK) Color(0xFFF4DDD7) else RematerialColors.BronzeSoft, shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(16.dp)) { Text("Perhatian", style = MaterialTheme.typography.titleMedium); Text(AnalysisPresentation.safetyTitle(safety.outcome), style = MaterialTheme.typography.bodyMedium, color = if (safety.outcome == SafetyOutcome.BLOCK) Color(0xFF9B3E32) else RematerialColors.DeepForest); safety.reasons.take(2).forEach { reason -> Text("• $reason", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(top = 5.dp)) } } } }
+        item { Spacer(Modifier.height(16.dp)); val safety = result.safety; Surface(Modifier.fillMaxWidth(), color = if (safety.outcome == SafetyOutcome.BLOCK) Color(0xFFF4DDD7) else RematerialColors.Surface, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, RematerialColors.Line)) { Column(Modifier.padding(18.dp)) { Text("Hal yang perlu diperhatikan", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(6.dp)); Text(AnalysisPresentation.safetyTitle(safety.outcome), style = MaterialTheme.typography.titleLarge, color = if (safety.outcome == SafetyOutcome.BLOCK) Color(0xFF9B3E32) else RematerialColors.DeepForest); Spacer(Modifier.height(6.dp)); Text(AnalysisPresentation.safetyBody(safety.outcome), style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); safety.reasons.forEach { reason -> Text("• $reason", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(top = 8.dp)) } } } }
         item {
             Spacer(Modifier.height(12.dp))
-            Surface(Modifier.fillMaxWidth().clickable { showTechnical = !showTechnical }, color = RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, RematerialColors.Line)) { Column(Modifier.padding(16.dp)) { Text(if (showTechnical) "Tutup detail analisis" else "Detail analisis", style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest); if (showTechnical) { Spacer(Modifier.height(12.dp)); result.science.forEach { finding -> Text(finding.title, style = MaterialTheme.typography.labelLarge); Text(finding.interpretation, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(bottom = 10.dp)) }; result.mathematics.forEach { calculation -> Text("${calculation.formulaExpression} = ${formatAmount(calculation.result)} ${AnalysisPresentation.unit(calculation.unit)}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(bottom = 8.dp)) } } } }
+            val labels = state.initial?.requestedFields.orEmpty().associate { it.id to it.label }
+            ResultSection(
+                "Bukti yang mendukung",
+                result.science.joinToString("\n\n") { finding ->
+                    "${finding.title}\n${finding.interpretation}\n\nMengapa: ${finding.principle}\nBerdasarkan: ${finding.observationRefs.joinToString { labels[it] ?: it.value }}\nSumber: ${finding.sourceRefs.joinToString { AnalysisPresentation.source(it.value) }}\nKeterbatasan: ${finding.limitation}\nPerlu dicek: ${finding.recommendedVerification}"
+                },
+                RematerialColors.Surface,
+            )
         }
+        item { Spacer(Modifier.height(12.dp)); Surface(Modifier.fillMaxWidth().clickable { showTechnical = !showTechnical }, color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(18.dp)) { Text(if (showTechnical) "Sembunyikan cara menghitung" else "Lihat cara menghitung", style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest); if (showTechnical) { Spacer(Modifier.height(12.dp)); result.mathematics.forEach { calculation -> Text("${calculation.inputs.joinToString { "${it.name}: ${it.value} ${AnalysisPresentation.unit(it.unit)}" }}\nRumus: ${calculation.formulaExpression}\nHasil perkiraan: ${"%.2f".format(calculation.result)} ${AnalysisPresentation.unit(calculation.unit)}\nCatatan: ${calculation.limitations}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Ink, modifier = Modifier.padding(bottom = 14.dp)) } } } } }
         item { Spacer(Modifier.height(18.dp)); if (state.saved) Text("Ide tersimpan dan tetap tersedia setelah aplikasi dibuka ulang.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.DeepForest); Spacer(Modifier.height(8.dp)); RematerialButton(if (state.saving) "Menyimpan..." else if (state.saved) "Tersimpan" else "Simpan ide ini", onSave, Modifier.fillMaxWidth(), enabled = selected != null && !state.saved && !state.saving, leadingIcon = RematerialIcons.Hammer); Spacer(Modifier.height(10.dp)); selected?.let { option -> RematerialButton("Buat di pengrajin", { onOpenArtisan(option) }, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.Store) }; if (selected == null && result.productOptions.isNotEmpty()) Text("Pilih satu ide dulu untuk melanjutkan.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
@@ -575,17 +635,8 @@ private fun ResultSection(title: String, body: String, color: Color) { Surface(M
 @Composable
 private fun ProductOptionCard(option: ProductOption, selected: Boolean, onSelect: () -> Unit) {
     val sufficiency = when { option.scoreComponents.materialSufficiency >= 95 -> "Bahan diperkirakan cukup"; option.scoreComponents.materialSufficiency >= 60 -> "Kemungkinan cukup setelah diukur"; else -> "Ukuran produk perlu disesuaikan" }
-    Surface(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onSelect), color = if (selected) RematerialColors.BronzeSoft else RematerialColors.Surface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, if (selected) RematerialColors.Bronze else RematerialColors.Line)) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.Top) { Text(option.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f)); Text("${option.provisionalProductScore.toInt()}/100", style = MaterialTheme.typography.titleMedium, color = RematerialColors.DeepForest) }
-            Spacer(Modifier.height(5.dp)); Text(option.explanation, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, maxLines = 2)
-            Spacer(Modifier.height(10.dp)); Text("✓ $sufficiency", style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest)
-            Text("✓ ${formatAmount(option.estimatedUsedQuantity)} ${AnalysisPresentation.unit(option.estimatedUsedUnit)} bahan", style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest, modifier = Modifier.padding(top = 4.dp))
-            Text("✓ ${option.requiredToolIds.take(2).joinToString { AnalysisPresentation.tool(it) }}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.DeepForest, modifier = Modifier.padding(top = 4.dp))
-            Spacer(Modifier.height(10.dp)); Text(if (selected) "Dipilih" else "Pilih", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest)
-        }
+    Surface(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onSelect), color = if (selected) RematerialColors.BronzeSoft else RematerialColors.Surface, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, if (selected) RematerialColors.Bronze else RematerialColors.Line)) {
+        Column(Modifier.padding(18.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(option.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f)); Text(if (selected) "Dipilih" else "Pilih", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest) }; Spacer(Modifier.height(8.dp)); Text(option.explanation, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(12.dp)); HorizontalDivider(color = RematerialColors.Line); Spacer(Modifier.height(10.dp)); Text(sufficiency, style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest); Text("Alat utama: ${option.requiredToolIds.joinToString { AnalysisPresentation.tool(it) }}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(top = 6.dp)) }
     }
     Spacer(Modifier.height(10.dp))
 }
-
-private fun formatAmount(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
