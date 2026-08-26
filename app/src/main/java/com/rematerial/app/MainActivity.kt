@@ -87,6 +87,7 @@ private fun ReMaterialNavHost() {
     val productionViewModel = workspaceKey?.let { hiltViewModel<ProductionViewModel>(key = "$it:production") }
     val analysisViewModel = workspaceKey?.let { hiltViewModel<AnalysisViewModel>(key = "$it:analysis") }
     val productionState = productionViewModel?.state?.collectAsStateWithLifecycle()?.value
+    val analysisState = analysisViewModel?.state?.collectAsStateWithLifecycle()?.value
     val openAnalysis = {
         analysisViewModel?.let {
             it.prepareForEntry()
@@ -140,6 +141,8 @@ private fun ReMaterialNavHost() {
                 area = session?.location?.area.orEmpty(),
                 latestRequest = productionState?.requests?.firstOrNull(),
                 nearbyArtisan = productionState?.artisans?.firstOrNull(),
+                recentMaterial = analysisState?.result?.category?.displayName,
+                recentConfidence = analysisState?.result?.confidence?.times(100)?.toInt(),
                 onScan = openAnalysis,
                 onHistory = { navController.navigateUserDestination(Routes.Analysis) },
                 onProduction = { navController.navigateUserDestination(Routes.Production) },

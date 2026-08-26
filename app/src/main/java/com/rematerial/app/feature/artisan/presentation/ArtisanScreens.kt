@@ -139,10 +139,10 @@ private fun ArtisanDock(page: ArtisanPage, onSelect: (ArtisanPage) -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Surface(
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = RematerialDockMetrics.horizontalPadding).padding(top = RematerialDockMetrics.outerVerticalPadding, bottom = RematerialDockMetrics.bottomGap),
-            color = RematerialColors.Glass,
-            shape = RoundedCornerShape(30.dp),
-            shadowElevation = 16.dp,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = .8f)),
+            color = RematerialColors.Surface,
+            shape = RoundedCornerShape(0.dp),
+            shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, RematerialColors.Line),
         ) {
             Row(Modifier.fillMaxWidth().height(RematerialDockMetrics.surfaceHeight).selectableGroup(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
                 ArtisanTab.entries.forEach { tab ->
@@ -175,7 +175,7 @@ private fun ArtisanHomeScreen(
     val current = jobs.firstOrNull { it.status == ProductionStatus.IN_PRODUCTION } ?: jobs.firstOrNull()
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp), contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { RematerialTopBar("Ruang Pengrajin", actionIcon = RematerialIcons.UserRound, actionDescription = "Profil pengrajin", onAction = onProfile) }
-        item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Selamat datang, $displayName.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Kerjakan yang paling penting.", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink) }; RematerialIcon(RematerialIcons.Bell, "Notifikasi", Modifier.size(22.dp), RematerialColors.DeepForest) } }
+        item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Selamat datang, $displayName", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Text("Pekerjaan hari ini", style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink) }; RematerialIcon(RematerialIcons.Bell, "Notifikasi", Modifier.size(22.dp), RematerialColors.DeepForest) } }
         item { Text("Pekerjaan utama", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink) }
         current?.let { item { PriorityJobCard(it, onJob) } }
         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("Antrean pekerjaan", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f)); Text("${jobs.size} pekerjaan", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) } }

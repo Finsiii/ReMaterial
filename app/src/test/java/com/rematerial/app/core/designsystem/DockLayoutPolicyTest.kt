@@ -6,18 +6,18 @@ import org.junit.Test
 
 class DockLayoutPolicyTest {
     @Test
-    fun `dock reserve exactly matches surface and its two gaps`() {
-        assertEquals(90.dp, RematerialDockMetrics.reservedBottom)
+    fun `bottom navigation reserves only its compact surface height`() {
+        assertEquals(64.dp, RematerialDockMetrics.reservedBottom)
     }
 
     @Test
     fun `dock content reserve adds the navigation inset once`() {
-        assertEquals(114.dp, RematerialDockMetrics.contentBottomPadding(24.dp))
+        assertEquals(88.dp, RematerialDockMetrics.contentBottomPadding(24.dp))
     }
 
     @Test
     fun `standalone content does not reserve a hidden dock`() {
-        assertEquals(114.dp, RematerialDockMetrics.screenBottomPadding(24.dp, dockVisible = true))
+        assertEquals(88.dp, RematerialDockMetrics.screenBottomPadding(24.dp, dockVisible = true))
         assertEquals(48.dp, RematerialDockMetrics.screenBottomPadding(24.dp, dockVisible = false))
     }
 
