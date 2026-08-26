@@ -81,16 +81,20 @@ private fun ReMaterialNavHost() {
     var analysisCameraOpen by rememberSaveable { mutableStateOf(false) }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val identityViewModel: IdentityViewModel = hiltViewModel()
-    val productionViewModel: ProductionViewModel = hiltViewModel()
-    val analysisViewModel: AnalysisViewModel = hiltViewModel()
     val identityState by identityViewModel.state.collectAsStateWithLifecycle()
-    val productionState by productionViewModel.state.collectAsStateWithLifecycle()
     val session = identityState.session
+    val workspaceKey = userWorkspaceKey(session?.role, session?.accountId?.value)
+    val productionViewModel = workspaceKey?.let { hiltViewModel<ProductionViewModel>(key = "$it:production") }
+    val analysisViewModel = workspaceKey?.let { hiltViewModel<AnalysisViewModel>(key = "$it:analysis") }
+    val productionState = productionViewModel?.state?.collectAsStateWithLifecycle()?.value
     val openAnalysis = {
-        analysisViewModel.prepareForEntry()
-        navController.navigateUserDestination(Routes.Analysis)
+        analysisViewModel?.let {
+            it.prepareForEntry()
+            navController.navigateUserDestination(Routes.Analysis)
+        }
+        Unit
     }
-    LaunchedEffect(session) { productionViewModel.applySession(session) }
+    LaunchedEffect(session, productionViewModel) { productionViewModel?.applySession(session) }
     Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
@@ -134,8 +138,8 @@ private fun ReMaterialNavHost() {
             UserHomeScreen(
                 displayName = session?.displayName.orEmpty(),
                 area = session?.location?.area.orEmpty(),
-                latestRequest = productionState.requests.firstOrNull(),
-                nearbyArtisan = productionState.artisans.firstOrNull(),
+                latestRequest = productionState?.requests?.firstOrNull(),
+                nearbyArtisan = productionState?.artisans?.firstOrNull(),
                 onScan = openAnalysis,
                 onHistory = { navController.navigateUserDestination(Routes.Analysis) },
                 onProduction = { navController.navigateUserDestination(Routes.Production) },
@@ -143,12 +147,12 @@ private fun ReMaterialNavHost() {
             )
         }
         composable(Routes.Analysis) {
-            AnalysisRoute(
-                viewModel = analysisViewModel,
+            analysisViewModel?.let { activeAnalysis -> AnalysisRoute(
+                viewModel = activeAnalysis,
                 onCameraVisibilityChanged = { analysisCameraOpen = it },
                 onClose = { navController.popBackStack() },
                 onOpenArtisan = { option, analysisId, safetyOutcome ->
-                    productionViewModel.saveDraft(
+                    productionViewModel?.saveDraft(
                         ProductDraft(
                             optionId = option.optionId,
                             title = option.title,
@@ -165,14 +169,14 @@ private fun ReMaterialNavHost() {
                     )
                     navController.navigateUserDestination(Routes.Production)
                 },
-            )
+            ) }
         }
         composable(Routes.Production) {
-            ProductionRoute(
+            productionViewModel?.let { activeProduction -> ProductionRoute(
                 onBack = { navController.popBackStack() },
                 onChangeProduct = { navController.navigateUserDestination(Routes.Analysis) },
-                viewModel = productionViewModel,
-            )
+                viewModel = activeProduction,
+            ) }
         }
         composable(Routes.Market) {
             MarketplaceRoute(
@@ -205,7 +209,7 @@ private fun ReMaterialNavHost() {
             RematerialDock(
                 selected = selected,
                 onDestinationSelected = { destination ->
-                    if (destination == DockDestination.Scan) analysisViewModel.prepareForEntry()
+                    if (destination == DockDestination.Scan) analysisViewModel?.prepareForEntry()
                     navController.navigateDockDestination(destination)
                 },
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -213,6 +217,9 @@ private fun ReMaterialNavHost() {
         }
     }
 }
+
+internal fun userWorkspaceKey(role: Role?, accountId: String?): String? =
+    accountId?.takeIf { role == Role.USER && it.isNotBlank() }?.let { "user:$it" }
 
 private val HorizontalPageMotion.slideDirection: AnimatedContentTransitionScope.SlideDirection
     get() = if (this == HorizontalPageMotion.FORWARD) {

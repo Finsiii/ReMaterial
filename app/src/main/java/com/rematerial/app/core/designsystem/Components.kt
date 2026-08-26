@@ -32,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,6 +70,9 @@ enum class HorizontalPageMotion { FORWARD, BACKWARD }
 
 fun horizontalPageMotion(initialPosition: Int, targetPosition: Int): HorizontalPageMotion =
     if (targetPosition >= initialPosition) HorizontalPageMotion.FORWARD else HorizontalPageMotion.BACKWARD
+
+internal fun dockUsesFilledSelection(destination: DockDestination, selected: Boolean): Boolean =
+    selected && destination == DockDestination.Scan
 
 @Composable
 fun RematerialIcon(
@@ -238,7 +240,11 @@ fun RematerialListRow(
         .padding(vertical = 14.dp)
     Row(rowModifier, verticalAlignment = Alignment.CenterVertically) {
         leadingIcon?.let {
-            RematerialIcon(it, null, Modifier.size(20.dp), RematerialColors.DeepForest)
+            Surface(shape = androidx.compose.foundation.shape.CircleShape, color = RematerialColors.ControlFill) {
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    RematerialIcon(it, null, Modifier.size(19.dp), RematerialColors.DeepForest)
+                }
+            }
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -307,30 +313,25 @@ fun RematerialDock(
             ) {
                 DockDestination.entries.forEach { destination ->
                     val active = selected == destination
+                    val filled = dockUsesFilledSelection(destination, active)
                     val activeColor by animateColorAsState(
-                        targetValue = if (destination == DockDestination.Scan) RematerialColors.DeepForest else RematerialColors.Surface,
+                        targetValue = if (filled) RematerialColors.DeepForest else Color.Transparent,
                         animationSpec = spring(dampingRatio = 1f, stiffness = 650f),
                         label = "dock-active-color",
-                    )
-                    val activeElevation by animateDpAsState(
-                        targetValue = if (active) 4.dp else 0.dp,
-                        animationSpec = spring(dampingRatio = 1f, stiffness = 650f),
-                        label = "dock-active-elevation",
                     )
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 2.dp, vertical = 7.dp)
                             .clip(RoundedCornerShape(23.dp))
-                            .then(if (active) Modifier.background(activeColor) else Modifier)
+                            .background(activeColor)
                             .sizeIn(minHeight = RematerialDockMetrics.minHitTarget)
                             .selectable(
                                 selected = active,
                                 role = Role.Tab,
                                 onClick = { onDestinationSelected(destination) },
                             )
-                            .semantics { contentDescription = destination.label }
-                            .then(if (activeElevation > 0.dp) Modifier.shadow(activeElevation, RoundedCornerShape(23.dp), clip = false) else Modifier),
+                            .semantics { contentDescription = destination.label },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
@@ -338,6 +339,14 @@ fun RematerialDock(
                         RematerialIcon(destination.icon, null, Modifier.size(if (destination.isPrimary) 22.dp else 20.dp), foreground)
                         Spacer(Modifier.height(4.dp))
                         Text(destination.label, style = MaterialTheme.typography.labelSmall, color = foreground)
+                        Spacer(Modifier.height(3.dp))
+                        Box(
+                            Modifier
+                                .width(18.dp)
+                                .height(2.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (active && !filled) RematerialColors.Bronze else Color.Transparent),
+                        )
                     }
                 }
             }

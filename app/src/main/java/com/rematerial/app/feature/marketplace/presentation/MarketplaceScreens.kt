@@ -200,7 +200,11 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
                 CategoryLink("Semua", state.category == null) { onCategory(null) }
                 listOf("Logam", "Kayu", "Tekstil").forEach { category -> CategoryLink(category, state.category == category) { onCategory(category) } }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
+            if (state.query.isBlank() && state.category == null && state.products.isNotEmpty()) {
+                MarketEditorialPanel(state.products.size)
+                Spacer(Modifier.height(24.dp))
+            }
             if (state.products.isEmpty()) {
                 Text("Belum ada karya yang cocok.", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
                 Spacer(Modifier.height(6.dp)); Text("Coba kata kunci atau kategori lain.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
@@ -210,6 +214,23 @@ private fun MarketHomeScreen(state: MarketplaceState, onSearch: (String) -> Unit
             }
         }
         items(state.products, key = { it.id }) { ProductCard(it, onProduct) }
+    }
+}
+
+@Composable
+private fun MarketEditorialPanel(productCount: Int) {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(24.dp), shadowElevation = 3.dp) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Karya yang bisa ditelusuri", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Surface)
+                Spacer(Modifier.height(5.dp))
+                Text("Bahan, studio, dan cerita pembuatannya hadir dalam satu detail.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Surface.copy(alpha = .72f))
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(productCount.toString().padStart(2, '0'), style = MaterialTheme.typography.displaySmall, color = RematerialColors.BronzeSoft)
+                Text("karya pilihan", style = MaterialTheme.typography.labelSmall, color = RematerialColors.Surface.copy(alpha = .68f))
+            }
+        }
     }
 }
 
@@ -344,12 +365,55 @@ fun UserAccountRoute(
             Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp, vertical = 14.dp),
             contentPadding = PaddingValues(bottom = RematerialDockMetrics.contentBottomPadding(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
         ) {
-            item { RematerialTopBar("Akun", onBack = onBack); Spacer(Modifier.height(22.dp)); Text(session.displayName, style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink); Text(session.email, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(28.dp)); Text("Ruangmu", style = MaterialTheme.typography.titleLarge); AccountRow("Analisis material", "Lihat material yang pernah dipetakan", RematerialIcons.Camera, onAnalysis); AccountRow("Produksi", "Pantau karya yang sedang dibuat", RematerialIcons.Hammer, onProduction); AccountRow("Pesanan pasar", "Riwayat pembelian dan pengiriman", RematerialIcons.Receipt, onOrders); Spacer(Modifier.height(26.dp)); Text("Lokasi rekomendasi", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(12.dp)); RematerialField(accountArea, { accountArea = it }, "Kota atau area", placeholder = "Contoh: Bandung"); Spacer(Modifier.height(12.dp)); RematerialField(accountAddress, { accountAddress = it }, "Alamat", placeholder = "Alamat untuk produksi dan pengiriman"); Spacer(Modifier.height(14.dp)); RematerialButton("Simpan lokasi", { onUpdateLocation(accountArea, accountAddress) }, Modifier.fillMaxWidth(), enabled = accountArea.isNotBlank() || accountAddress.isNotBlank(), leadingIcon = RematerialIcons.MapPin); Spacer(Modifier.height(24.dp)); RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut) }
+            item {
+                RematerialTopBar("Akun", onBack = onBack)
+                Spacer(Modifier.height(18.dp))
+                AccountIdentityPanel(session)
+                Spacer(Modifier.height(26.dp))
+                Text("Ruangmu", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(10.dp))
+                Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        RematerialListRow("Analisis material", supportingText = "Lihat material yang pernah dipetakan", leadingIcon = RematerialIcons.Camera, onClick = onAnalysis)
+                        RematerialListRow("Produksi", supportingText = "Pantau karya yang sedang dibuat", leadingIcon = RematerialIcons.Hammer, onClick = onProduction)
+                        RematerialListRow("Pesanan pasar", supportingText = "Riwayat pembelian dan pengiriman", leadingIcon = RematerialIcons.Receipt, onClick = onOrders)
+                    }
+                }
+                Spacer(Modifier.height(26.dp))
+                Text("Lokasi rekomendasi", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(5.dp))
+                Text("Digunakan untuk mencari pengrajin dan memperkirakan pengiriman.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+                Spacer(Modifier.height(14.dp))
+                RematerialField(accountArea, { accountArea = it }, "Kota atau area", placeholder = "Contoh: Bandung")
+                Spacer(Modifier.height(12.dp))
+                RematerialField(accountAddress, { accountAddress = it }, "Alamat", placeholder = "Alamat untuk produksi dan pengiriman")
+                Spacer(Modifier.height(14.dp))
+                RematerialButton("Simpan lokasi", { onUpdateLocation(accountArea, accountAddress) }, Modifier.fillMaxWidth(), enabled = accountArea.isNotBlank() || accountAddress.isNotBlank(), leadingIcon = RematerialIcons.MapPin)
+                Spacer(Modifier.height(24.dp))
+                RematerialButton("Keluar dari akun", onLogout, Modifier.fillMaxWidth(), leadingIcon = RematerialIcons.LogOut)
+            }
         }
     }
 }
 
-@Composable private fun AccountRow(title: String, supporting: String, icon: Int, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { RematerialIcon(icon, null, Modifier.size(21.dp), RematerialColors.DeepForest); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }; RematerialIcon(RematerialIcons.ChevronRight, null, Modifier.size(18.dp), RematerialColors.Muted) } }
+@Composable
+private fun AccountIdentityPanel(session: Session) {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
+                Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+                    Text(session.displayName.trim().take(1).uppercase().ifBlank { "R" }, style = MaterialTheme.typography.titleLarge, color = Color.White)
+                }
+            }
+            Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                Text(session.displayName, style = MaterialTheme.typography.titleLarge, color = Color.White)
+                Text(session.email, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = .7f))
+                Spacer(Modifier.height(8.dp))
+                Text(session.location?.area?.takeIf(String::isNotBlank) ?: "Lokasi belum dilengkapi", style = MaterialTheme.typography.labelLarge, color = RematerialColors.BronzeSoft)
+            }
+        }
+    }
+}
 
 private fun rupiah(value: Int): String = "Rp" + "%,d".format(value).replace(',', '.')
 

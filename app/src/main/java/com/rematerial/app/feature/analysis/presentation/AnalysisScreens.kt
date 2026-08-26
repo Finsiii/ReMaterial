@@ -218,16 +218,36 @@ private fun AnalysisErrorBanner(message: String, onRetry: (() -> Unit)?) {
 @Composable
 private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> Unit, onManual: (MaterialCategory) -> Unit, onSavedIdeas: () -> Unit, cameraPermissionDenied: Boolean, onDismissPermission: () -> Unit) {
     var showManual by rememberSaveable { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { RematerialTopBar("Scan material", onBack = onClose) }
         item {
-            Spacer(Modifier.height(8.dp)); Text("Beri materialmu arah baru", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
-            Spacer(Modifier.height(8.dp)); Text("Foto dulu untuk mendapat ide pemakaian yang cocok, atau pilih kategori secara manual.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
+            Spacer(Modifier.height(4.dp)); Text("Beri materialmu arah baru", style = MaterialTheme.typography.displaySmall, color = RematerialColors.Ink)
+            Spacer(Modifier.height(8.dp)); Text("Mulai dari beberapa foto. ReMaterial membaca kondisinya, lalu menyiapkan pilihan benda yang masuk akal.", style = MaterialTheme.typography.bodyLarge, color = RematerialColors.Muted)
         }
-        item { ScanChoice("Ambil foto", "Kamera dengan panduan frame", RematerialIcons.Camera, onCamera) }
-        item { ScanChoice("Pilih dari galeri", "Gunakan foto yang sudah ada", RematerialIcons.Upload, onPick) }
-        item { ScanChoice("Pilih kategori manual", "Lanjut tanpa foto", RematerialIcons.Search, { showManual = true }) }
-        item { ScanChoice("Ide tersimpan", "Buka kembali hasil yang sudah kamu simpan", RematerialIcons.Hammer, onSavedIdeas) }
+        item { ScanJourneyPanel() }
+        item {
+            Column {
+                Text("Mulai analisis", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(10.dp))
+                Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, RematerialColors.Line), shadowElevation = 2.dp) {
+                    Column {
+                        ScanChoice("Ambil foto sekarang", "Kamera dengan panduan frame", RematerialIcons.Camera, onCamera, primary = true)
+                        HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = RematerialColors.Line)
+                        ScanChoice("Pilih dari galeri", "Gunakan beberapa foto yang sudah ada", RematerialIcons.Upload, onPick)
+                    }
+                }
+            }
+        }
+        item {
+            Column {
+                Text("Cara lain", style = MaterialTheme.typography.headlineSmall, color = RematerialColors.Ink)
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ScanShortcut("Pilih manual", "Tanpa foto", RematerialIcons.Search, Modifier.weight(1f)) { showManual = true }
+                    ScanShortcut("Ide tersimpan", "Buka kembali", RematerialIcons.Hammer, Modifier.weight(1f), onSavedIdeas)
+                }
+            }
+        }
         if (cameraPermissionDenied) item {
             Surface(color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Bronze)) {
                 Column(Modifier.padding(16.dp)) {
@@ -240,7 +260,7 @@ private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> 
                 }
             }
         }
-        item { Spacer(Modifier.height(8.dp)); Text("Agar foto mudah dibaca", style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink); Text("Gunakan cahaya cukup, ambil dari dekat, dan pastikan seluruh permukaan material terlihat.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted) }
+        item { PhotoReadingGuide() }
         if (showManual) item {
             Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
                 Column(Modifier.padding(18.dp)) {
@@ -257,12 +277,73 @@ private fun ScanScreen(onClose: () -> Unit, onPick: () -> Unit, onCamera: () -> 
 }
 
 @Composable
-private fun ScanChoice(title: String, supporting: String, icon: Int, onClick: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick), color = RematerialColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.size(46.dp), color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(12.dp)) { Box(contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(21.dp), RematerialColors.DeepForest) } }
+private fun ScanJourneyPanel() {
+    Surface(color = RematerialColors.DeepForest, shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Lima sudut, satu gambaran utuh", style = MaterialTheme.typography.titleLarge, color = RematerialColors.Surface)
+                    Spacer(Modifier.height(5.dp))
+                    Text("AI membandingkan detail yang terlihat di setiap foto.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Surface.copy(alpha = .72f))
+                }
+                Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { RematerialIcon(RematerialIcons.Camera, null, Modifier.size(21.dp), Color.White) }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Row(Modifier.fillMaxWidth()) {
+                JourneyStep("01", "Bentuk", Modifier.weight(1f))
+                JourneyStep("02", "Permukaan", Modifier.weight(1f))
+                JourneyStep("03", "Detail", Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun JourneyStep(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(number, style = MaterialTheme.typography.labelSmall, color = RematerialColors.BronzeSoft)
+        Spacer(Modifier.height(3.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = RematerialColors.Surface)
+    }
+}
+
+@Composable
+private fun ScanChoice(title: String, supporting: String, icon: Int, onClick: () -> Unit, primary: Boolean = false) {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(48.dp), color = if (primary) RematerialColors.DeepForest else RematerialColors.BronzeSoft, shape = RoundedCornerShape(15.dp)) { Box(contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(21.dp), if (primary) Color.White else RematerialColors.DeepForest) } }
             Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted) }
             RematerialIcon(RematerialIcons.ArrowRight, null, Modifier.size(18.dp), RematerialColors.Muted)
+    }
+}
+
+@Composable
+private fun ScanShortcut(title: String, supporting: String, icon: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(modifier.height(132.dp).clickable(role = Role.Button, onClick = onClick), color = RematerialColors.Surface, shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+        Column(Modifier.padding(16.dp)) {
+            Surface(shape = CircleShape, color = RematerialColors.ControlFill) {
+                Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) { RematerialIcon(icon, null, Modifier.size(18.dp), RematerialColors.DeepForest) }
+            }
+            Spacer(Modifier.weight(1f))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+            Text(supporting, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+        }
+    }
+}
+
+@Composable
+private fun PhotoReadingGuide() {
+    Surface(color = RematerialColors.BronzeSoft, shape = RoundedCornerShape(22.dp)) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = RematerialColors.Surface.copy(alpha = .72f)) {
+                Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) { RematerialIcon(RematerialIcons.Search, null, Modifier.size(19.dp), RematerialColors.DeepForest) }
+            }
+            Column(Modifier.padding(start = 14.dp)) {
+                Text("Buat detail mudah terbaca", style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+                Spacer(Modifier.height(3.dp))
+                Text("Gunakan cahaya merata, dekatkan kamera, dan tampilkan seluruh permukaan.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+            }
         }
     }
 }

@@ -167,16 +167,25 @@ private fun ImmersiveHero(displayName: String, onScan: () -> Unit, onHistory: ()
 
 @Composable
 private fun ImpactSummary() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        ImpactMetric("5 foto", "lebih banyak bukti")
-        ImpactMetric("0–2", "pertanyaan AI")
-        ImpactMetric("3 ide", "produk spesifik")
+    Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(26.dp), border = BorderStroke(1.dp, RematerialColors.Line)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 17.dp)) {
+            Text("Dari bahan ke keputusan", style = MaterialTheme.typography.titleMedium, color = RematerialColors.Ink)
+            Text("Proses singkat, hasil tetap bisa ditelusuri.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
+            Spacer(Modifier.height(17.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                ImpactMetric("5 foto", "bukti visual", Modifier.weight(1f))
+                Box(Modifier.size(width = 1.dp, height = 40.dp).background(RematerialColors.Line))
+                ImpactMetric("0–2", "pertanyaan", Modifier.weight(1f))
+                Box(Modifier.size(width = 1.dp, height = 40.dp).background(RematerialColors.Line))
+                ImpactMetric("3 ide", "produk jelas", Modifier.weight(1f))
+            }
+        }
     }
 }
 
 @Composable
-private fun ImpactMetric(value: String, label: String) {
-    Column(Modifier.padding(horizontal = 4.dp)) {
+private fun ImpactMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleLarge, color = RematerialColors.DeepForest)
         Text(label, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
     }

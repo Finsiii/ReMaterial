@@ -2,11 +2,21 @@ package com.rematerial.app
 
 import com.rematerial.app.core.designsystem.DockDestination
 import com.rematerial.app.core.designsystem.HorizontalPageMotion
+import com.rematerial.app.feature.identity.domain.Role
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UserShellPolicyTest {
+    @Test
+    fun `user workspace is created only after a concrete user session exists`() {
+        assertNull(userWorkspaceKey(null, null))
+        assertNull(userWorkspaceKey(Role.USER, ""))
+        assertNull(userWorkspaceKey(Role.ARTISAN, "artisan-01"))
+        assertNull(userWorkspaceKey(Role.SELLER, "seller-01"))
+        assertEquals("user:user-01", userWorkspaceKey(Role.USER, "user-01"))
+    }
+
     @Test
     fun `user routes map to the locked dock order`() {
         assertEquals(0, userTabIndex("user-home"))

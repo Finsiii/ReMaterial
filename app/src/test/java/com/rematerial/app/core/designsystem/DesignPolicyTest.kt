@@ -35,6 +35,14 @@ class DesignPolicyTest {
     }
 
     @Test
+    fun `only the central scan action uses a filled active treatment`() {
+        assertFalse(dockUsesFilledSelection(DockDestination.Beranda, selected = true))
+        assertFalse(dockUsesFilledSelection(DockDestination.Produksi, selected = true))
+        assertTrue(dockUsesFilledSelection(DockDestination.Scan, selected = true))
+        assertFalse(dockUsesFilledSelection(DockDestination.Scan, selected = false))
+    }
+
+    @Test
     fun `design system does not expose badge or pill status primitives`() {
         assertFalse(DesignSystemPolicy.usesDecorativeGradients)
         assertFalse(DesignSystemPolicy.usesPillStatuses)
