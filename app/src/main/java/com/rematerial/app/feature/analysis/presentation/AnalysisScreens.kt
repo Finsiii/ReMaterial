@@ -661,7 +661,40 @@ private fun ResultSection(title: String, body: String, color: Color) { Surface(M
 private fun ProductOptionCard(option: ProductOption, selected: Boolean, repairFlow: Boolean, onSelect: () -> Unit) {
     val sufficiency = when { option.scoreComponents.materialSufficiency >= 95 -> "Bahan diperkirakan cukup"; option.scoreComponents.materialSufficiency >= 60 -> "Kemungkinan cukup setelah diukur"; else -> "Ukuran produk perlu disesuaikan" }
     Surface(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onSelect), color = if (selected) RematerialColors.BronzeSoft else RematerialColors.Surface, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, if (selected) RematerialColors.Bronze else RematerialColors.Line)) {
-        Column(Modifier.padding(18.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(option.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f)); Text(if (selected) "Dipilih" else "Pilih", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest) }; Spacer(Modifier.height(8.dp)); Text(option.explanation, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(12.dp)); HorizontalDivider(color = RematerialColors.Line); Spacer(Modifier.height(10.dp)); if (!repairFlow) Text(sufficiency, style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest); Text("Alat utama: ${option.requiredToolIds.joinToString { AnalysisPresentation.tool(it) }}", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.padding(top = if (repairFlow) 0.dp else 6.dp)) }
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(option.title, style = MaterialTheme.typography.titleLarge, color = RematerialColors.Ink)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Kecocokan ${option.provisionalProductScore.toInt()}/100", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest)
+                }
+                Text(if (selected) "Dipilih" else "Pilih", style = MaterialTheme.typography.labelLarge, color = RematerialColors.DeepForest, modifier = Modifier.padding(start = 12.dp, top = 2.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            RematerialProgress((option.provisionalProductScore / 100.0).toFloat(), height = 5.dp)
+            Spacer(Modifier.height(16.dp))
+            Text("Mengapa cocok", style = MaterialTheme.typography.labelLarge, color = RematerialColors.Ink)
+            Spacer(Modifier.height(5.dp))
+            Text(option.explanation, style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted)
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = RematerialColors.Line)
+            Spacer(Modifier.height(12.dp))
+            if (!repairFlow) {
+                OptionInfoRow("Ketersediaan bahan", sufficiency)
+                Spacer(Modifier.height(10.dp))
+            }
+            OptionInfoRow("Alat utama", option.requiredToolIds.joinToString { AnalysisPresentation.tool(it) })
+            Spacer(Modifier.height(10.dp))
+            OptionInfoRow("Keahlian", option.requiredSkillIds.joinToString { AnalysisPresentation.skill(it) })
+        }
     }
     Spacer(Modifier.height(10.dp))
+}
+
+@Composable
+private fun OptionInfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted, modifier = Modifier.weight(.42f))
+        Text(value.ifBlank { "Dikonfirmasi pengrajin" }, style = MaterialTheme.typography.bodySmall, color = RematerialColors.Ink, modifier = Modifier.weight(.58f))
+    }
 }

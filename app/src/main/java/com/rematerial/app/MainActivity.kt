@@ -39,6 +39,7 @@ import com.rematerial.app.feature.identity.presentation.IdentityEntryScreen
 import com.rematerial.app.feature.identity.presentation.IdentityEvent
 import com.rematerial.app.feature.identity.presentation.IdentityViewModel
 import com.rematerial.app.feature.production.domain.ProductDraft
+import com.rematerial.app.feature.production.domain.userFacingMaterialSummary
 import com.rematerial.app.feature.production.presentation.ProductionRoute
 import com.rematerial.app.feature.production.presentation.ProductionViewModel
 import com.rematerial.app.feature.marketplace.presentation.MarketplaceRoute
@@ -156,7 +157,7 @@ private fun ReMaterialNavHost() {
                         ProductDraft(
                             optionId = option.optionId,
                             title = option.title,
-                            materialSummary = "${option.requiredMaterial} terpilih dari hasil analisis ${analysisId.value.takeLast(8)}",
+                            materialSummary = userFacingMaterialSummary(option.requiredMaterial, analysisId.value),
                             minimumQuantity = "Perlu dikonfirmasi pengrajin",
                             analysisId = analysisId.value,
                             safetyAllowed = safetyOutcome != SafetyOutcome.BLOCK,

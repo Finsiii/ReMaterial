@@ -188,4 +188,15 @@ private fun demoArtisans() = listOf(
         capabilityKeys = setOf("metal", "wood", "plastic"), toolKeys = setOf("hand-tools", "cutting-tools", "measuring-tools", "finishing-tools", "light-welding"),
         skillKeys = setOf("basic-making", "precision-making", "surface-finishing", "patina"),
     ),
+    ArtisanProfile(
+        "artisan-nadira", "Nadira Textile Studio", "Bogor · Tanah Sareal", "4,1 km",
+        listOf("Reparasi pakaian", "Jahit tekstil", "Ganti pelapis", "Upholstery ringan"), "3–6 hari", "Rp85.000–350.000", "Menerima pesanan minggu ini",
+        "Studio tekstil Bogor untuk memperbaiki pakaian, mengganti pelapis, serta memanfaatkan kembali kain yang masih layak.",
+        "Cocok untuk reparasi sweatshirt, jahitan, tambalan, dan pembaruan pelapis.", whatsapp = "081298765432",
+        latitude = -6.5737, longitude = 106.7903, portfolioImageKeys = listOf("material_textile", "material_wood"),
+        rating = "4,9", completedJobs = "73 karya selesai", responseTime = "Balas dalam 35 menit",
+        capabilityKeys = setOf("textile", "wood"),
+        toolKeys = setOf("hand-tools", "cutting-tools", "measuring-tools", "finishing-tools", "sewing-tools"),
+        skillKeys = setOf("basic-making", "precision-making", "surface-finishing", "sewing"),
+    ),
 )

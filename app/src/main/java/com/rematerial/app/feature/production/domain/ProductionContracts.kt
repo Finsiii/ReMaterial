@@ -20,6 +20,11 @@ data class ProductDraft(
     val estimatedUsage: String = "",
 )
 
+fun userFacingMaterialSummary(requiredMaterial: String, analysisId: String): String {
+    require(analysisId.isNotBlank())
+    return "${requiredMaterial.trim()} · Dipilih dari hasil analisis material"
+}
+
 fun ProductDraft.isReadyForProduction(): Boolean =
     optionId != null &&
         title.isNotBlank() &&

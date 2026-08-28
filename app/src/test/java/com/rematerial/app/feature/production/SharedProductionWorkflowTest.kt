@@ -13,6 +13,7 @@ import com.rematerial.app.feature.production.data.MockProductionRepository
 import com.rematerial.app.feature.production.domain.ProductDraft
 import com.rematerial.app.feature.production.domain.ProductionRequestInput
 import com.rematerial.app.feature.production.domain.ProductionStatus
+import com.rematerial.app.feature.production.domain.userFacingMaterialSummary
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -20,6 +21,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SharedProductionWorkflowTest {
+    @Test
+    fun userFacingMaterialSummaryNeverExposesAnalysisId() {
+        val summary = userFacingMaterialSummary("Tekstil", "analysis-2a2c162e")
+
+        assertEquals("Tekstil · Dipilih dari hasil analisis material", summary)
+        assertTrue(!summary.contains("2a2c162e"))
+    }
+
+    @Test
+    fun textileDraftFindsVerifiedBogorArtisan() = runTest {
+        val repository = MockProductionRepository(DemoProductionStore(seedDemoRequest = false), InMemorySessionStore(demoUser()))
+        repository.saveDraft(
+            ProductDraft(
+                optionId = ProductOptionId("repair-textile"), title = "Perbaikan sweatshirt", analysisId = "analysis-textile",
+                safetyAllowed = true, requiredCapabilities = listOf("textile"), requiredTools = listOf("sewing-tools"), requiredSkills = listOf("sewing"),
+            ),
+        )
+
+        val artisans = (repository.searchArtisans("Bogor") as Result.Success).value
+
+        assertEquals(listOf("artisan-nadira"), artisans.map { it.id })
+        assertTrue(artisans.single().verified)
+    }
+
     @Test
     fun submittedUserRequestAppearsForAssignedArtisanAndUpdatesUserTimeline() = runTest {
         val workflow = DemoProductionStore(seedDemoRequest = false)
