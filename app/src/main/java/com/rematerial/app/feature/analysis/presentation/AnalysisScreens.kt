@@ -102,6 +102,7 @@ import com.rematerial.app.feature.analysis.domain.FieldAnswer
 import com.rematerial.app.feature.analysis.domain.ProductOption
 import com.rematerial.app.feature.analysis.domain.ReuseStrategy
 import com.rematerial.app.feature.analysis.domain.SavedAnalysisIdea
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +151,7 @@ fun AnalysisRoute(
         ) { step ->
             when (step) {
                 AnalysisStep.SCAN -> ScanScreen(onClose, { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, ::openCamera, viewModel::chooseManual, viewModel::openSavedIdeas, cameraPermissionMessage) { cameraPermissionMessage = false }
-                AnalysisStep.PREVIEW -> PreviewScreen(state, navigateBack, viewModel::startPhotoAnalysis, ::openCamera) { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                AnalysisStep.PREVIEW -> PreviewScreen(state, navigateBack, viewModel::startPhotoAnalysis, ::openCamera, { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, viewModel::removePhoto)
                 AnalysisStep.CONFIRM -> ConfirmScreen(state, navigateBack, viewModel::setCategory, viewModel::continueToInputs)
                 AnalysisStep.INPUTS -> InputScreen(state, navigateBack, viewModel::updateValue, viewModel::markUnavailable, viewModel::submitInputs)
                 AnalysisStep.RESULT -> ResultScreen(
@@ -466,11 +467,35 @@ private fun CameraControl(icon: Int, description: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PreviewScreen(state: AnalysisUiState, onClose: () -> Unit, onStart: () -> Unit, onCamera: () -> Unit, onGallery: () -> Unit) {
+private fun PreviewScreen(state: AnalysisUiState, onClose: () -> Unit, onStart: () -> Unit, onCamera: () -> Unit, onGallery: () -> Unit, onRemovePhoto: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)) {
         item { RematerialTopBar("Periksa foto", onBack = onClose); Spacer(Modifier.height(18.dp)); Text("Foto dari 3 sudut", style = MaterialTheme.typography.headlineLarge, color = RematerialColors.Ink); Spacer(Modifier.height(8.dp)); Text("Ambil tampak keseluruhan, bagian rusak, dan detail material agar objek serta komponennya terbaca.", style = MaterialTheme.typography.bodyMedium, color = RematerialColors.Muted); Spacer(Modifier.height(18.dp)) }
         item { Surface(Modifier.fillMaxWidth().height(240.dp), color = RematerialColors.Surface, shape = RoundedCornerShape(18.dp)) { AsyncImage(model = state.photoUri, contentDescription = "Pratinjau foto material", modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Crop) }; Spacer(Modifier.height(12.dp)); Text("${state.photos.size}/6 foto · ${if (state.photos.size >= 3) "siap dianalisis" else "kurang ${3 - state.photos.size} foto lagi"}", style = MaterialTheme.typography.titleMedium, color = if (state.photos.size >= 3) RematerialColors.DeepForest else RematerialColors.Ink); Spacer(Modifier.height(10.dp)) }
-        item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(state.photoUris) { uri -> AsyncImage(model = uri, contentDescription = null, modifier = Modifier.size(68.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop) } }; Spacer(Modifier.height(16.dp)) }
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(state.photos, key = { it.mediaId }) { photo ->
+                    Box(Modifier.size(76.dp)) {
+                        AsyncImage(
+                            model = Uri.fromFile(File(photo.privatePath)),
+                            contentDescription = "Foto material",
+                            modifier = Modifier.align(Alignment.BottomStart).size(68.dp).clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Surface(
+                            modifier = Modifier.align(Alignment.TopEnd).size(36.dp).clickable(role = Role.Button) { onRemovePhoto(photo.mediaId) },
+                            color = RematerialColors.Ink,
+                            shape = CircleShape,
+                            shadowElevation = 3.dp,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                RematerialIcon(RematerialIcons.X, "Hapus foto", Modifier.size(15.dp), Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         if (state.photos.size < 6) item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { RematerialButton("Tambah kamera", onCamera, Modifier.weight(1f), leadingIcon = RematerialIcons.Camera); RematerialButton("Tambah galeri", onGallery, Modifier.weight(1f), leadingIcon = RematerialIcons.Upload) }; Spacer(Modifier.height(18.dp)) }
         item { RematerialButton("Analisis ${state.photos.size} foto", onStart, Modifier.fillMaxWidth(), enabled = state.photos.size >= 3, leadingIcon = RematerialIcons.ArrowRight) }
     }

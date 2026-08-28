@@ -47,6 +47,27 @@ class AnalysisViewModelConcurrencyTest {
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun removingPrimaryPhotoPromotesNextPhotoPersistsThenDeletesOwnedFile() = runTest(dispatcher) {
+        val first = PhotoReference("first", "/owned/first.jpg", "image/jpeg", 10)
+        val second = PhotoReference("second", "/owned/second.jpg", "image/jpeg", 10)
+        val repository = FakeRepository(
+            session = AnalysisSession(
+                analysisId = AnalysisId("analysis-remove"), photo = first, additionalPhotos = listOf(second), phase = AnalysisFlowPhase.PREVIEW,
+            ),
+        )
+        val media = FakeMediaStore()
+        val viewModel = AnalysisViewModel(DelayedGateway(), media, repository)
+        advanceUntilIdle()
+
+        viewModel.removePhoto("first")
+        advanceUntilIdle()
+
+        assertEquals("second", viewModel.state.value.photo?.mediaId)
+        assertTrue(viewModel.state.value.additionalPhotos.isEmpty())
+        assertEquals("second", repository.currentSession?.photo?.mediaId)
+        assertEquals(listOf("/owned/first.jpg"), media.deletedPaths)
+    }
+
     @Test fun delayedHydrationBlocksImportAndCleansOnlyCommittedReferences() = runTest(dispatcher) {
         val repository = FakeRepository(snapshotInitiallyReady = false)
         val media = FakeMediaStore()

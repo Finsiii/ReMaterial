@@ -138,6 +138,40 @@ class AnalysisViewModel @Inject constructor(
     fun importPhoto(uri: String) = importMedia(uri, false)
     fun importCapture(path: String) = importMedia(path, true)
 
+    fun removePhoto(mediaId: String) {
+        val current = _state.value
+        if (!current.acceptsIntent() || current.step != AnalysisStep.PREVIEW) return
+        val removed = current.photos.firstOrNull { it.mediaId == mediaId } ?: return
+        val remaining = current.photos.filterNot { it.mediaId == mediaId }
+        val next = current.copy(
+            step = if (remaining.isEmpty()) AnalysisStep.SCAN else AnalysisStep.PREVIEW,
+            photo = remaining.firstOrNull(),
+            additionalPhotos = remaining.drop(1),
+            initial = null,
+            prediction = null,
+            confirmation = null,
+            categoryConfirmed = false,
+            selectedCategory = null,
+            answers = emptyMap(),
+            result = null,
+            loading = false,
+            error = null,
+            retryAction = null,
+            motionDirection = if (remaining.isEmpty()) AnalysisMotionDirection.BACKWARD else current.motionDirection,
+        )
+        val token = beginOperation { it.copy(loading = true, error = null, retryAction = null) }
+        activeJob = viewModelScope.launch {
+            when (val saved = commitSession(next.toSession())) {
+                is Result.Failure -> failIfCurrent(token, saved.error.userMessage(), null)
+                is Result.Success -> if (isCurrent(token)) {
+                    _state.value = next
+                    clearActive(token)
+                    deleteIfUnreferenced(removed)
+                }
+            }
+        }
+    }
+
     private fun importMedia(value: String, isCapture: Boolean) {
         if (!_state.value.acceptsIntent()) return
         val previous = _state.value
