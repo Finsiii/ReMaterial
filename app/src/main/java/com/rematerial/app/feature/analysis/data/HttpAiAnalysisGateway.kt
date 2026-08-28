@@ -6,13 +6,21 @@ import com.rematerial.app.core.model.MaterialCategory
 import com.rematerial.app.core.model.Result
 import com.rematerial.app.feature.analysis.domain.AiAnalysisGateway
 import com.rematerial.app.feature.analysis.domain.AnalysisCatalog
+import com.rematerial.app.feature.analysis.domain.AnalysisProgress
+import com.rematerial.app.feature.analysis.domain.AnalysisProgressStage
 import com.rematerial.app.feature.analysis.domain.AnalysisValidator
 import com.rematerial.app.feature.analysis.domain.CategoryPrediction
 import com.rematerial.app.feature.analysis.domain.CompletedAnalysisRequest
 import com.rematerial.app.feature.analysis.domain.CompletedAnalysisResponse
 import com.rematerial.app.feature.analysis.domain.InitialAnalysisRequest
 import com.rematerial.app.feature.analysis.domain.InitialAnalysisResponse
+import com.rematerial.app.feature.analysis.domain.EvidenceLevel
+import com.rematerial.app.feature.analysis.domain.InferredMaterial
+import com.rematerial.app.feature.analysis.domain.MaterialComponent
+import com.rematerial.app.feature.analysis.domain.ObjectAnalysis
+import com.rematerial.app.feature.analysis.domain.ObjectState
 import com.rematerial.app.feature.analysis.domain.RankedCategoryPrediction
+import com.rematerial.app.feature.analysis.domain.ReuseStrategy
 import com.rematerial.app.feature.analysis.transport.AnalysisMappers
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpRequestTimeoutException
@@ -36,38 +44,45 @@ import kotlinx.serialization.json.Json
 class HttpAiAnalysisGateway(
     private val client: HttpClient,
     private val baseUrl: String,
-    private val model: String = "gpt-5-6-mini",
+    private val visionModel: String = "gpt-5-6-instant",
+    private val refinementModel: String = "gpt-5-6",
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
     private val mediaPayloadReader: MediaPayloadReader? = null,
     private val authorizationProvider: AnalysisAuthorizationProvider = AnalysisAuthorizationProvider.None,
 ) : AiAnalysisGateway {
-    override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> {
+    override suspend fun start(request: InitialAnalysisRequest, onProgress: suspend (AnalysisProgress) -> Unit): Result<InitialAnalysisResponse> {
         if (!isSecureBaseUrl()) return insecureUrlFailure()
         request.manualCategory?.let { category ->
-            return Result.Success(initialResponse(request, category, confidence = 1.0, listOf("quantity", "condition"), mapOf("quantity" to "1", "condition" to "unknown", "contamination" to "unknown")))
+            return Result.Success(initialResponse(request, category, confidence = 1.0, listOf("quantity", "condition"), mapOf("quantity" to "1", "condition" to "unknown", "contamination" to "unknown"), request.conversationId, request.parentMessageId, request.objectAnalysis))
         }
 
-        if (request.photos.size !in 5..10) return Result.Failure(DomainFailure.UnsupportedImage)
+        if (request.photos.size !in 3..6) return Result.Failure(DomainFailure.UnsupportedImage)
         val reader = mediaPayloadReader ?: return Result.Failure(DomainFailure.Unavailable)
         val images = mutableListOf<String>()
-        request.photos.forEach { photo ->
+        request.photos.forEachIndexed { index, photo ->
+            onProgress(AnalysisProgress(AnalysisProgressStage.PREPARING_PHOTOS, index.toFloat() / request.photos.size, "Menyiapkan foto ${index + 1} dari ${request.photos.size}"))
             when (val media = reader.read(photo)) {
                 is Result.Success -> images += Base64.getEncoder().encodeToString(media.value)
                 is Result.Failure -> return media
             }
         }
-        val reply = when (
+        onProgress(AnalysisProgress(AnalysisProgressStage.UPLOADING_PHOTOS, 0f, "Mengirim foto ke server"))
+        onProgress(AnalysisProgress(AnalysisProgressStage.UPLOADING_PHOTOS, 1f, "Foto siap dikirim"))
+        onProgress(AnalysisProgress(AnalysisProgressStage.ANALYZING_OBJECT, null, "AI mengenali objek dan komponennya"))
+        val turn = when (
             val response = ask(
                 message = ReMaterialAiPrompts.initial(request.analysisId.value),
                 images = images,
+                model = visionModel,
             )
         ) {
             is Result.Success -> response.value
             is Result.Failure -> return response
         }
+        onProgress(AnalysisProgress(AnalysisProgressStage.PREPARING_RESULT, 1f, "Menyiapkan hasil analisis"))
 
         return try {
-            val classification = decodeReply<ClassificationReply>(reply)
+            val classification = decodeReply<ClassificationReply>(turn.reply)
             val category = classification.category.toMaterialCategory()
             val confidence = classification.confidencePercent.toConfidence()
             val schema = AnalysisCatalog.schemaFor(category)
@@ -77,7 +92,8 @@ class HttpAiAnalysisGateway(
                 "contamination" to classification.contamination.takeIf { it in setOf("none", "low", "unknown", "suspected_hazardous") }.orEmpty().ifBlank { "unknown" },
             )
             val followUps = classification.followUpIds.distinct().filter { id -> schema.any { it.id.value == id } }.take(2)
-            val response = initialResponse(request, category, confidence, followUps, suggested)
+            val objectAnalysis = classification.toObjectAnalysis()
+            val response = initialResponse(request, category, confidence, followUps, suggested, turn.conversationId, turn.messageId, objectAnalysis)
             when (AnalysisValidator.validate(response)) {
                 is Result.Success -> Result.Success(response)
                 is Result.Failure -> Result.Failure(DomainFailure.UnsupportedSchema)
@@ -89,17 +105,24 @@ class HttpAiAnalysisGateway(
         }
     }
 
-    override suspend fun complete(request: CompletedAnalysisRequest): Result<CompletedAnalysisResponse> {
+    override suspend fun complete(request: CompletedAnalysisRequest, onProgress: suspend (AnalysisProgress) -> Unit): Result<CompletedAnalysisResponse> {
         if (!isSecureBaseUrl()) return insecureUrlFailure()
+        onProgress(AnalysisProgress(AnalysisProgressStage.ANALYZING_OBJECT, null, "AI menyempurnakan rekomendasi"))
         val observationsJson = json.encodeToString(request.observations.map(AnalysisMappers::toDto))
-        val reply = when (val response = ask(ReMaterialAiPrompts.complete(request.category, observationsJson))) {
+        val turn = when (val response = ask(
+            message = ReMaterialAiPrompts.complete(request.category, observationsJson, request.objectAnalysis),
+            model = refinementModel,
+            conversationId = request.conversationId,
+            parentMessageId = request.parentMessageId,
+        )) {
             is Result.Success -> response.value
             is Result.Failure -> return response
         }
+        onProgress(AnalysisProgress(AnalysisProgressStage.PREPARING_RESULT, 1f, "Menyiapkan hasil analisis"))
 
         return try {
-            val enrichment = decodeReply<CompletionReply>(reply)
-            val completed = AnalysisFixtures.completedFor(request).enrichedWith(enrichment)
+            val enrichment = decodeReply<CompletionReply>(turn.reply)
+            val completed = AnalysisFixtures.completedFor(request).enrichedWith(enrichment).copy(objectAnalysis = request.objectAnalysis)
             when (AnalysisValidator.validate(completed, AnalysisCatalog.schemaFor(request.category))) {
                 is Result.Success -> Result.Success(completed)
                 is Result.Failure -> Result.Failure(DomainFailure.UnsupportedSchema)
@@ -111,12 +134,19 @@ class HttpAiAnalysisGateway(
         }
     }
 
-    private suspend fun ask(message: String, image: String? = null, images: List<String> = emptyList()): Result<String> = try {
+    private suspend fun ask(
+        message: String,
+        image: String? = null,
+        images: List<String> = emptyList(),
+        model: String,
+        conversationId: String? = null,
+        parentMessageId: String? = null,
+    ): Result<ChatTurn> = try {
         val response = client.post(baseUrl.trimEnd('/') + "/v1/chat") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Accept, ContentType.Application.Json.toString())
             authorizationProvider.authorizationHeader()?.let { header(HttpHeaders.Authorization, it) }
-            setBody(json.encodeToString(ChatRequest(message, image, images, model)))
+            setBody(json.encodeToString(ChatRequest(message, image, images, model, conversationId = conversationId, parentMessageId = parentMessageId)))
         }
         when {
             response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden ->
@@ -129,7 +159,7 @@ class HttpAiAnalysisGateway(
             else -> {
                 val envelope = json.decodeFromString<ChatEnvelope>(response.bodyAsText())
                 if (envelope.reply.isBlank()) Result.Failure(DomainFailure.MalformedResponse)
-                else Result.Success(envelope.reply)
+                else Result.Success(ChatTurn(envelope.reply, envelope.conversationId, envelope.messageId))
             }
         }
     } catch (_: HttpRequestTimeoutException) {
@@ -150,12 +180,37 @@ class HttpAiAnalysisGateway(
         confidence: Double,
         followUpIds: List<String>,
         suggestedValues: Map<String, String>,
+        conversationId: String?,
+        messageId: String?,
+        objectAnalysis: ObjectAnalysis?,
     ) = InitialAnalysisResponse(
         analysisId = request.analysisId,
         prediction = CategoryPrediction(category, confidence, rankedCandidates(category, confidence)),
         requestedFields = AnalysisCatalog.schemaFor(category).filter { it.id.value in followUpIds },
         suggestedValues = suggestedValues,
+        conversationId = conversationId,
+        messageId = messageId,
+        objectAnalysis = objectAnalysis,
     )
+
+    private fun ClassificationReply.toObjectAnalysis(): ObjectAnalysis = ObjectAnalysis(
+        objectName = objectName.trim().ifBlank { "Material bekas" },
+        state = objectState.toEnumOr(ObjectState.UNKNOWN),
+        visibleComponents = visibleComponents.mapNotNull { component ->
+            val part = component.part.trim()
+            val material = component.material.trim()
+            if (part.isBlank() || material.isBlank()) null else MaterialComponent(part, material, component.evidence.toEnumOr(EvidenceLevel.VISIBLE))
+        },
+        inferredHiddenMaterials = inferredHiddenMaterials.mapNotNull { inferred ->
+            val material = inferred.material.trim()
+            val reason = inferred.reason.trim()
+            if (material.isBlank() || reason.isBlank()) null else InferredMaterial(material, reason)
+        },
+        primaryStrategy = primaryStrategy.toEnumOr(ReuseStrategy.REPURPOSE),
+    )
+
+    private inline fun <reified T : Enum<T>> String.toEnumOr(fallback: T): T =
+        enumValues<T>().firstOrNull { it.name == trim().uppercase() } ?: fallback
 
     private fun rankedCandidates(category: MaterialCategory, confidence: Double): List<RankedCategoryPrediction> {
         if (confidence >= 0.80) return listOf(RankedCategoryPrediction(category, confidence))
@@ -235,7 +290,11 @@ private data class ChatRequest(
     val model: String,
     val stream: Boolean = false,
     @SerialName("reasoning_effort") val reasoningEffort: String = "low",
+    @SerialName("conversation_id") val conversationId: String? = null,
+    @SerialName("parent_message_id") val parentMessageId: String? = null,
 )
+
+private data class ChatTurn(val reply: String, val conversationId: String?, val messageId: String?)
 
 @Serializable
 private data class ChatEnvelope(
@@ -252,7 +311,18 @@ private data class ClassificationReply(
     val condition: String = "unknown",
     val contamination: String = "unknown",
     @SerialName("follow_up_ids") val followUpIds: List<String> = emptyList(),
+    @SerialName("object_name") val objectName: String = "Material bekas",
+    @SerialName("object_state") val objectState: String = "UNKNOWN",
+    @SerialName("visible_components") val visibleComponents: List<ComponentReply> = emptyList(),
+    @SerialName("inferred_hidden_materials") val inferredHiddenMaterials: List<InferredMaterialReply> = emptyList(),
+    @SerialName("primary_strategy") val primaryStrategy: String = "REPURPOSE",
 )
+
+@Serializable
+private data class ComponentReply(val part: String = "", val material: String = "", val evidence: String = "VISIBLE")
+
+@Serializable
+private data class InferredMaterialReply(val material: String = "", val reason: String = "")
 
 @Serializable
 private data class CompletionReply(

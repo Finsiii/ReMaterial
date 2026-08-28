@@ -79,7 +79,7 @@ fun UserHomeScreen(
             Spacer(Modifier.height(8.dp))
             Surface(color = RematerialColors.Surface, shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    RematerialListRow("Analisis material baru", supportingText = "Ambil 5 foto dan temukan pilihan produk", leadingIcon = RematerialIcons.Camera, onClick = onScan)
+                    RematerialListRow("Analisis material baru", supportingText = "Ambil 3 foto dan temukan tindakan terbaik", leadingIcon = RematerialIcons.Camera, onClick = onScan)
                     RematerialListRow("Buka riwayat bahan", supportingText = "Lihat kembali hasil terakhir dan ide tersimpan", leadingIcon = RematerialIcons.History, onClick = onHistory)
                     RematerialListRow("Temukan pengrajin", supportingText = "Cocokkan kebutuhan dengan keahlian terdekat", leadingIcon = RematerialIcons.MapPin, onClick = onArtisans)
                 }
@@ -173,7 +173,7 @@ private fun ImpactSummary() {
             Text("Proses singkat, hasil tetap bisa ditelusuri.", style = MaterialTheme.typography.bodySmall, color = RematerialColors.Muted)
             Spacer(Modifier.height(17.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                ImpactMetric("5 foto", "bukti visual", Modifier.weight(1f))
+                ImpactMetric("3 foto", "bukti visual", Modifier.weight(1f))
                 Box(Modifier.size(width = 1.dp, height = 40.dp).background(RematerialColors.Line))
                 ImpactMetric("0–2", "pertanyaan", Modifier.weight(1f))
                 Box(Modifier.size(width = 1.dp, height = 40.dp).background(RematerialColors.Line))

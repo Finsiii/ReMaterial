@@ -49,7 +49,8 @@ object AnalysisModule {
         HttpAiAnalysisGateway(
             client = client,
             baseUrl = BuildConfig.AI_API_BASE_URL,
-            model = BuildConfig.AI_MODEL,
+            visionModel = BuildConfig.AI_VISION_MODEL,
+            refinementModel = BuildConfig.AI_REFINEMENT_MODEL,
             mediaPayloadReader = mediaPayloadReader,
         )
 

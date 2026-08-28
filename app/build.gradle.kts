@@ -38,7 +38,8 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "AI_API_BASE_URL", "\"https://gpt-api.zerobits.tech\"")
-        buildConfigField("String", "AI_MODEL", "\"gpt-5-6-mini\"")
+        buildConfigField("String", "AI_VISION_MODEL", "\"gpt-5-6-instant\"")
+        buildConfigField("String", "AI_REFINEMENT_MODEL", "\"gpt-5-6\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

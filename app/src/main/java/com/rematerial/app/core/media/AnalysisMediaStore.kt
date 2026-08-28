@@ -4,11 +4,15 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import com.rematerial.app.core.model.DomainFailure
 import com.rematerial.app.core.model.Result
 import com.rematerial.app.feature.analysis.domain.PhotoReference
 import java.io.File
 import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineDispatcher
@@ -162,7 +166,27 @@ class OwnedFileMediaPayloadReader(
             MediaValidationPolicy.validate(photo.contentType, file.length()) != null || file.length() != photo.sizeBytes ||
             header == null || MediaValidationPolicy.validateHeader(photo.contentType, header) != null || !file.isDecodableImage()
         ) return@withContext Result.Failure(DomainFailure.UnsupportedImage)
-        try { Result.Success(file.readBytes()) } catch (_: IOException) { Result.Failure(DomainFailure.Unavailable) }
+        try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext Result.Failure(DomainFailure.UnsupportedImage)
+            var sample = 1
+            while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 1600) sample *= 2
+            val decoded = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+                ?: return@withContext Result.Failure(DomainFailure.UnsupportedImage)
+            val scale = minOf(1f, 1280f / maxOf(decoded.width, decoded.height))
+            val scaled = if (scale < 1f) Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
+            val flattened = Bitmap.createBitmap(scaled.width, scaled.height, Bitmap.Config.RGB_565).also { output ->
+                Canvas(output).apply { drawColor(Color.WHITE); drawBitmap(scaled, 0f, 0f, null) }
+            }
+            val output = ByteArrayOutputStream()
+            if (!flattened.compress(Bitmap.CompressFormat.JPEG, 82, output)) return@withContext Result.Failure(DomainFailure.UnsupportedImage)
+            Result.Success(output.toByteArray())
+        } catch (_: IOException) {
+            Result.Failure(DomainFailure.Unavailable)
+        } catch (_: RuntimeException) {
+            Result.Failure(DomainFailure.UnsupportedImage)
+        }
     }
 }
 

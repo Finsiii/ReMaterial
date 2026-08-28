@@ -93,8 +93,9 @@ class DomainContractsTest {
     }
 
     @Test
-    fun `http gateway sends photo to chat api and maps classification`() = runTest {
-        val body = """{"reply":"{\"category\":\"WOOD\",\"confidence_percent\":91}","conversation_id":"conv-1","message_id":"msg-1"}"""
+    fun `http gateway accepts three photos and keeps ai conversation metadata`() = runTest {
+        val reply = """{"category":"WOOD","confidence_percent":91,"object_name":"Kursi kayu berlapis kain","object_state":"REPAIRABLE","visible_components":[{"part":"rangka","material":"kayu","evidence":"VISIBLE"},{"part":"pelapis dudukan","material":"kain","evidence":"VISIBLE"}],"inferred_hidden_materials":[{"material":"busa","reason":"Dudukan berlapis biasanya memiliki bantalan yang tertutup kain"}],"primary_strategy":"REPAIR","science":[{"title":"Kondisi kursi","principle":"Sambungan dan pelapis menentukan kelayakan perbaikan.","interpretation":"Bentuk kursi masih utuh dan layak diperbaiki.","limitation":"Bagian dalam belum terlihat.","recommended_verification":"Periksa sambungan dan bantalan."}],"product_options":[{"title":"Perbaikan pelapis kursi","explanation":"Ganti kain dan periksa busa."},{"title":"Penguatan sambungan kursi","explanation":"Kencangkan sambungan rangka."},{"title":"Pembaruan finishing kursi","explanation":"Bersihkan dan lapisi ulang permukaan."}]}"""
+        val body = Json.encodeToString(mapOf("reply" to reply, "conversation_id" to "conv-1", "message_id" to "msg-1"))
         val engine = MockEngine { request ->
             assertEquals("/v1/chat", request.url.encodedPath)
             respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
@@ -111,6 +112,11 @@ class DomainContractsTest {
         assertEquals("1", response.value.suggestedValues["quantity"])
         assertEquals("unknown", response.value.suggestedValues["condition"])
         assertEquals("unknown", response.value.suggestedValues["contamination"])
+        assertEquals("conv-1", response.value.conversationId)
+        assertEquals("msg-1", response.value.messageId)
+        assertEquals("Kursi kayu berlapis kain", response.value.objectAnalysis?.objectName)
+        assertEquals(2, response.value.objectAnalysis?.visibleComponents?.size)
+        assertEquals("busa", response.value.objectAnalysis?.inferredHiddenMaterials?.first()?.material)
     }
 
     @Test
@@ -153,7 +159,7 @@ class DomainContractsTest {
     private fun photoRequest() = InitialAnalysisRequest(
         analysisId = AnalysisId("analysis-photo"),
         photo = PhotoReference("media-1", "/private/photo.jpg", "image/jpeg", 3),
-        additionalPhotos = (2..5).map { index -> PhotoReference("media-$index", "/private/photo-$index.jpg", "image/jpeg", 3) },
+        additionalPhotos = (2..3).map { index -> PhotoReference("media-$index", "/private/photo-$index.jpg", "image/jpeg", 3) },
     )
 
     private fun mediaReader() = object : MediaPayloadReader {

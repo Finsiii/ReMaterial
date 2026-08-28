@@ -325,9 +325,9 @@ class AnalysisViewModelConcurrencyTest {
         )
         val starts = mutableListOf<StartCall>()
         val completions = mutableListOf<CompleteCall>()
-        override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> =
+        override suspend fun start(request: InitialAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<InitialAnalysisResponse> =
             StartCall(request).also(starts::add).response.await()
-        override suspend fun complete(request: CompletedAnalysisRequest): Result<CompletedAnalysisResponse> =
+        override suspend fun complete(request: CompletedAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<CompletedAnalysisResponse> =
             CompleteCall(request).also(completions::add).response.await()
     }
 

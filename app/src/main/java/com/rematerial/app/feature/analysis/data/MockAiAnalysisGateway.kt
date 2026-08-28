@@ -381,7 +381,7 @@ class MockAiAnalysisGateway(
 ) : AiAnalysisGateway {
     enum class Scenario { METAL_HIGH, CABLE_MEDIUM, PLASTIC_LOW, WOOD_HIGH, TEXTILE_MEDIUM, ELECTRONICS_BLOCK, TIMEOUT, OFFLINE, MALFORMED, UNSUPPORTED_IMAGE, UNAVAILABLE }
 
-    override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> = when (scenario) {
+    override suspend fun start(request: InitialAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<InitialAnalysisResponse> = when (scenario) {
         Scenario.TIMEOUT -> Result.Failure(DomainFailure.Timeout)
         Scenario.OFFLINE -> Result.Failure(DomainFailure.Offline)
         Scenario.MALFORMED -> Result.Failure(DomainFailure.MalformedResponse)
@@ -393,7 +393,7 @@ class MockAiAnalysisGateway(
         }
     }
 
-    override suspend fun complete(request: CompletedAnalysisRequest): Result<CompletedAnalysisResponse> = when (scenario) {
+    override suspend fun complete(request: CompletedAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<CompletedAnalysisResponse> = when (scenario) {
         Scenario.TIMEOUT -> Result.Failure(DomainFailure.Timeout)
         Scenario.OFFLINE -> Result.Failure(DomainFailure.Offline)
         Scenario.MALFORMED -> Result.Failure(DomainFailure.MalformedResponse)
@@ -415,9 +415,9 @@ class MockAiAnalysisGateway(
 
 /** Release-safe fallback until the deployment injects its HTTPS API configuration. */
 class UnconfiguredAiAnalysisGateway : AiAnalysisGateway {
-    override suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse> =
+    override suspend fun start(request: InitialAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<InitialAnalysisResponse> =
         Result.Failure(DomainFailure.Unavailable)
 
-    override suspend fun complete(request: CompletedAnalysisRequest): Result<CompletedAnalysisResponse> =
+    override suspend fun complete(request: CompletedAnalysisRequest, onProgress: suspend (com.rematerial.app.feature.analysis.domain.AnalysisProgress) -> Unit): Result<CompletedAnalysisResponse> =
         Result.Failure(DomainFailure.Unavailable)
 }

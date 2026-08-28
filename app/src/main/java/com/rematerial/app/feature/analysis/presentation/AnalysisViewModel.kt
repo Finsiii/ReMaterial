@@ -19,6 +19,8 @@ import com.rematerial.app.feature.analysis.domain.AnalysisConfirmationPolicy
 import com.rematerial.app.feature.analysis.domain.AnalysisFlowPhase
 import com.rematerial.app.feature.analysis.domain.AnalysisInputValidator
 import com.rematerial.app.feature.analysis.domain.AnalysisPersistenceSnapshot
+import com.rematerial.app.feature.analysis.domain.AnalysisProgress
+import com.rematerial.app.feature.analysis.domain.AnalysisProgressStage
 import com.rematerial.app.feature.analysis.domain.AnalysisResponseValidator
 import com.rematerial.app.feature.analysis.domain.AnalysisSession
 import com.rematerial.app.feature.analysis.domain.AnalysisSessionRepository
@@ -79,6 +81,7 @@ data class AnalysisUiState(
     val saved: Boolean = false,
     val saving: Boolean = false,
     val loading: Boolean = false,
+    val analysisProgress: AnalysisProgress? = null,
     val hydrating: Boolean = true,
     val error: String? = null,
     val retryAction: AnalysisRetryAction? = null,
@@ -138,7 +141,7 @@ class AnalysisViewModel @Inject constructor(
     private fun importMedia(value: String, isCapture: Boolean) {
         if (!_state.value.acceptsIntent()) return
         val previous = _state.value
-        if (previous.photos.size >= 10) { _state.value = previous.copy(error = "Maksimal 10 foto untuk satu analisis."); return }
+        if (previous.photos.size >= 6) { _state.value = previous.copy(error = "Maksimal 6 foto untuk satu analisis."); return }
         val token = beginOperation { it.copy(loading = true, error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
             val imported = if (isCapture) {
@@ -193,23 +196,23 @@ class AnalysisViewModel @Inject constructor(
 
     fun startPhotoAnalysis() {
         if (!_state.value.acceptsIntent()) return
-        if (_state.value.photos.size < 5) { _state.value = _state.value.copy(error = "Tambahkan minimal 5 foto agar AI bisa membandingkan sudut dan kondisi bahan."); return }
+        if (_state.value.photos.size < 3) { _state.value = _state.value.copy(error = "Tambahkan minimal 3 foto yang jelas dari sudut berbeda."); return }
         startInitial(null)
     }
 
     private fun startInitial(manualCategory: MaterialCategory?) {
         if (_state.value.hydrating || _state.value.saving) return
         val token = beginOperation {
-            it.copy(loading = true, error = null, retryAction = null, initial = null, answers = emptyMap(), fieldErrors = emptyMap(), result = null, saved = false)
+            it.copy(loading = true, analysisProgress = null, error = null, retryAction = null, initial = if (manualCategory == null) null else it.initial, answers = emptyMap(), fieldErrors = emptyMap(), result = null, saved = false)
         }
         activeJob = viewModelScope.launch { performInitial(token, manualCategory) }
     }
 
     private suspend fun performInitial(token: Long, manualCategory: MaterialCategory?) {
         val current = _state.value
-        val request = InitialAnalysisRequest(current.analysisId, current.photo, current.additionalPhotos, manualCategory)
-        when (val result = gateway.start(request)) {
-            is Result.Failure -> failIfCurrent(token, result.error.userMessage(), AnalysisRetryAction.StartInitial(manualCategory))
+        val request = InitialAnalysisRequest(current.analysisId, current.photo, current.additionalPhotos, manualCategory, current.initial?.conversationId, current.initial?.messageId, current.initial?.objectAnalysis)
+        when (val result = gateway.start(request) { progress -> updateProgress(token, progress) }) {
+            is Result.Failure -> failIfCurrent(token, result.error.analysisMessage(_state.value.analysisProgress), AnalysisRetryAction.StartInitial(manualCategory))
             is Result.Success -> acceptInitial(token, request, result.value)
         }
     }
@@ -224,7 +227,7 @@ class AnalysisViewModel @Inject constructor(
                 val next = _state.value.copy(
                     step = AnalysisStep.CONFIRM, initial = response, prediction = response.prediction, confirmation = confirmation,
                     selectedCategory = when { explicit -> request.manualCategory; confirmation == AnalysisConfirmation.MANUAL_REQUIRED -> null; else -> response.prediction.category },
-                    categoryConfirmed = explicit, answers = response.suggestedValues.mapValues { FieldAnswer.Value(it.value) }, loading = false, error = null, retryAction = null,
+                    categoryConfirmed = explicit, answers = response.suggestedValues.mapValues { FieldAnswer.Value(it.value) }, loading = false, analysisProgress = null, error = null, retryAction = null,
                     motionDirection = AnalysisMotionDirection.FORWARD,
                 )
                 commitThenPublish(token, next, "Hasil kategori sudah diterima, tetapi belum dapat disimpan.")
@@ -272,17 +275,17 @@ class AnalysisViewModel @Inject constructor(
         val validation = AnalysisInputValidator.validate(response.requestedFields, current.answers)
         if (!validation.isValid) { _state.value = current.copy(fieldErrors = validation.fieldErrors, error = "Periksa kembali jawaban yang ditandai.", retryAction = null); return }
         val fullSchema = com.rematerial.app.feature.analysis.domain.AnalysisCatalog.schemaFor(category)
-        val request = CompletedAnalysisRequest(current.analysisId, category, fullSchema.map { it.toObservation(current.answers[it.id.value]) })
-        val token = beginOperation { it.copy(loading = true, fieldErrors = emptyMap(), error = null, retryAction = null) }
+        val request = CompletedAnalysisRequest(current.analysisId, category, fullSchema.map { it.toObservation(current.answers[it.id.value]) }, response.conversationId, response.messageId, response.objectAnalysis)
+        val token = beginOperation { it.copy(loading = true, analysisProgress = null, fieldErrors = emptyMap(), error = null, retryAction = null) }
         activeJob = viewModelScope.launch {
-            when (val result = gateway.complete(request)) {
-                is Result.Failure -> failIfCurrent(token, result.error.userMessage(), AnalysisRetryAction.Complete)
+            when (val result = gateway.complete(request) { progress -> updateProgress(token, progress) }) {
+                is Result.Failure -> failIfCurrent(token, result.error.analysisMessage(_state.value.analysisProgress), AnalysisRetryAction.Complete)
                 is Result.Success -> {
                     if (!isCurrent(token) || _state.value.analysisId != request.analysisId || _state.value.selectedCategory != category || _state.value.step != AnalysisStep.INPUTS) return@launch
                     when (val checked = AnalysisResponseValidator.completed(current.analysisId, category, result.value, request.observations, fullSchema)) {
                         is Result.Failure -> failIfCurrent(token, checked.error.userMessage(), AnalysisRetryAction.Complete)
                         is Result.Success -> {
-                            val next = _state.value.copy(step = AnalysisStep.RESULT, result = result.value, selectedOptionId = null, saved = false, loading = false, error = null, retryAction = null, motionDirection = AnalysisMotionDirection.FORWARD)
+                            val next = _state.value.copy(step = AnalysisStep.RESULT, result = result.value, selectedOptionId = null, saved = false, loading = false, analysisProgress = null, error = null, retryAction = null, motionDirection = AnalysisMotionDirection.FORWARD)
                             commitThenPublish(token, next, "Hasil analisis sudah diterima, tetapi belum dapat disimpan.")
                         }
                     }
@@ -518,9 +521,13 @@ class AnalysisViewModel @Inject constructor(
     private fun isCurrent(token: Long): Boolean = token == operationGeneration
     private fun clearActive(token: Long) { if (isCurrent(token)) activeJob = null }
 
+    private fun updateProgress(token: Long, progress: AnalysisProgress) {
+        if (isCurrent(token)) _state.value = _state.value.copy(analysisProgress = progress)
+    }
+
     private fun failIfCurrent(token: Long, message: String, retry: AnalysisRetryAction?, wasSaving: Boolean = false) {
         if (!isCurrent(token)) return
-        _state.value = _state.value.copy(loading = false, saving = if (wasSaving) false else _state.value.saving, error = message, retryAction = retry)
+        _state.value = _state.value.copy(loading = false, saving = if (wasSaving) false else _state.value.saving, analysisProgress = null, error = message, retryAction = retry)
         clearActive(token)
     }
 
@@ -592,5 +599,12 @@ class AnalysisViewModel @Inject constructor(
         DomainFailure.PermissionDenied -> "Foto tidak bisa dibaca. Pilih ulang dari galeri."
         DomainFailure.Unavailable -> "Layanan belum tersedia. Coba lagi sebentar."
         is DomainFailure.Validation -> violations.firstOrNull() ?: "Data belum valid."
+    }
+
+    private fun DomainFailure.analysisMessage(progress: AnalysisProgress?): String = when {
+        this != DomainFailure.Timeout -> userMessage()
+        progress?.stage == AnalysisProgressStage.PREPARING_PHOTOS -> "Perangkat memerlukan waktu terlalu lama untuk menyiapkan foto. Tutup aplikasi lain lalu coba lagi."
+        progress?.stage == AnalysisProgressStage.UPLOADING_PHOTOS -> "Unggahan foto terlalu lama. Periksa koneksi internet lalu coba lagi."
+        else -> "Foto sudah disiapkan, tetapi server AI belum merespons tepat waktu. Coba lagi sebentar."
     }
 }

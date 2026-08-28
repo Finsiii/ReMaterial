@@ -32,7 +32,38 @@ data class InitialAnalysisRequest(
     val photo: PhotoReference? = null,
     val additionalPhotos: List<PhotoReference> = emptyList(),
     val manualCategory: MaterialCategory? = null,
+    val conversationId: String? = null,
+    val parentMessageId: String? = null,
+    val objectAnalysis: ObjectAnalysis? = null,
 ) { val photos: List<PhotoReference> get() = listOfNotNull(photo) + additionalPhotos }
+
+@Serializable
+enum class EvidenceLevel { VISIBLE, LIKELY }
+
+@Serializable
+enum class ObjectState { INTACT, REPAIRABLE, PARTIAL, SCRAP, UNKNOWN }
+
+@Serializable
+enum class ReuseStrategy { REPAIR, UPGRADE, REPURPOSE, RECYCLE }
+
+@Serializable
+data class MaterialComponent(val part: String, val material: String, val evidence: EvidenceLevel)
+
+@Serializable
+data class InferredMaterial(val material: String, val reason: String)
+
+@Serializable
+data class ObjectAnalysis(
+    val objectName: String,
+    val state: ObjectState,
+    val visibleComponents: List<MaterialComponent> = emptyList(),
+    val inferredHiddenMaterials: List<InferredMaterial> = emptyList(),
+    val primaryStrategy: ReuseStrategy,
+)
+
+enum class AnalysisProgressStage { PREPARING_PHOTOS, UPLOADING_PHOTOS, ANALYZING_OBJECT, PREPARING_RESULT }
+
+data class AnalysisProgress(val stage: AnalysisProgressStage, val fraction: Float? = null, val detail: String = "")
 
 @Serializable
 data class CategoryPrediction(
@@ -74,6 +105,10 @@ data class InitialAnalysisResponse(
     val prediction: CategoryPrediction,
     val requestedFields: List<RequestedField>,
     val suggestedValues: Map<String, String> = emptyMap(),
+    val conversationId: String? = null,
+    val messageId: String? = null,
+    val objectAnalysis: ObjectAnalysis? = null,
+    val provisionalResult: CompletedAnalysisResponse? = null,
 )
 
 @Serializable
@@ -81,6 +116,9 @@ data class CompletedAnalysisRequest(
     val analysisId: AnalysisId,
     val category: MaterialCategory,
     val observations: List<Observation>,
+    val conversationId: String? = null,
+    val parentMessageId: String? = null,
+    val objectAnalysis: ObjectAnalysis? = null,
 )
 
 @Serializable
@@ -170,14 +208,16 @@ data class CompletedAnalysisResponse(
     val mathematics: List<MathCalculation>,
     val safety: SafetyAssessment,
     val productOptions: List<ProductOption>,
+    val objectAnalysis: ObjectAnalysis? = null,
 ) {
     init { require(confidence.isFinite() && confidence in 0.0..1.0) }
 }
 
 interface AiAnalysisGateway {
-    suspend fun start(request: InitialAnalysisRequest): Result<InitialAnalysisResponse>
+    suspend fun start(request: InitialAnalysisRequest, onProgress: suspend (AnalysisProgress) -> Unit = {}): Result<InitialAnalysisResponse>
     suspend fun complete(
         request: CompletedAnalysisRequest,
+        onProgress: suspend (AnalysisProgress) -> Unit = {},
     ): Result<CompletedAnalysisResponse>
 }
 
